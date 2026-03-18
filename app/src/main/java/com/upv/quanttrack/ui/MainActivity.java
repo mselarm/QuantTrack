@@ -23,6 +23,7 @@ import com.github.mikephil.charting.formatter.ValueFormatter;
 import com.upv.quanttrack.R;
 import com.upv.quanttrack.data.DailyData;
 import com.upv.quanttrack.data.MarketRepository;
+import com.upv.quanttrack.data.llm.LlmRepository;
 import com.upv.quanttrack.domain.math.SimpleMovingAverage;
 
 import java.util.ArrayList;
@@ -37,7 +38,8 @@ public class MainActivity extends AppCompatActivity {
     private Button btnSearch;
     private TextView tvCurrentPrice; // El HUD Financiero
     private MarketRepository repository;
-
+    private TextView tvLlmAnalysis;
+    private LlmRepository llmRepository;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -48,7 +50,8 @@ public class MainActivity extends AppCompatActivity {
         etTicker = findViewById(R.id.etTicker);
         btnSearch = findViewById(R.id.btnSearch);
         tvCurrentPrice = findViewById(R.id.tvCurrentPrice);
-
+        tvLlmAnalysis = findViewById(R.id.tvLlmAnalysis);
+        llmRepository = new LlmRepository();
         repository = new MarketRepository();
 
         configurarEstiloGrafico();
@@ -209,6 +212,44 @@ public class MainActivity extends AppCompatActivity {
         combinedChart.setVisibleXRangeMaximum(150);
         combinedChart.moveViewToX(n);
         combinedChart.invalidate();
+        // --- INYECCIÓN AL LLM (PROMPT ENGINEERING) ---
+
+        // Indicador de carga
+        tvLlmAnalysis.setText("Analizando topología y medias móviles con IA...");
+        tvLlmAnalysis.setTextColor(Color.YELLOW);
+
+        // 1. Extraer los últimos escalares calculados
+        double ultimaSma20 = sma20Results.length > 0 ? sma20Results[n - 1] : 0;
+        double ultimaSma50 = sma50Results.length > 0 ? sma50Results[n - 1] : 0;
+        double ultimaSma200 = sma200Results.length > 0 ? sma200Results[n - 1] : 0;
+
+        // 2. Construir el Prompt determinista
+        String prompt = String.format(
+                "Eres un analista cuantitativo riguroso. Analiza la acción %s. " +
+                        "Precio de cierre de hoy: %.2f. " +
+                        "Media Móvil 20 días: %.2f. " +
+                        "Media Móvil 50 días: %.2f. " +
+                        "Media Móvil 200 días: %.2f. " +
+                        "Instrucciones: Evalúa la tendencia actual comparando el precio con estas medias. " +
+                        "¿Hay soporte o resistencia? ¿Es un régimen alcista o bajista? " +
+                        "Sé directo, usa lenguaje técnico financiero y limítate a un párrafo conciso. No hagas saludos.",
+                ticker, ultimoPrecio, ultimaSma20, ultimaSma50, ultimaSma200
+        );
+
+        // 3. Ejecutar la red neuronal
+        llmRepository.analyzeMarket(prompt, new LlmRepository.LlmCallback() {
+            @Override
+            public void onSuccess(String analysis) {
+                tvLlmAnalysis.setText(analysis);
+                tvLlmAnalysis.setTextColor(Color.WHITE);
+            }
+
+            @Override
+            public void onError(String error) {
+                tvLlmAnalysis.setText("Error al generar análisis: " + error);
+                tvLlmAnalysis.setTextColor(Color.RED);
+            }
+        });
     }
 
     private void configurarEstiloGrafico() {

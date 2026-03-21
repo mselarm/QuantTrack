@@ -46,19 +46,5 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="150dp"
-        android:layout_marginTop="8dp"
-        android:background="#1A1A1A"
-        android:padding="8dp">
 
-        <TextView
-            android:id="@+id/tvLlmAnalysis"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textColor="#CCCCCC"
-            android:textSize="14sp"
-            android:text="El análisis cuantitativo aparecerá aquí..." />
-    </ScrollView>
 </LinearLayout>

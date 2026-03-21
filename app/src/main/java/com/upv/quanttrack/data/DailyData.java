@@ -1,28 +1,23 @@
 package com.upv.quanttrack.data;
-import com.google.gson.annotations.SerializedName;
 
 public class DailyData {
 
-    @SerializedName("1. open")
-    private String open;
+    private final double open;
+    private final double high;
+    private final double low;
+    private final double close;
 
-    @SerializedName("2. high")
-    private String high;
+    // Constructor que usa el MarketRepository al leer el CSV
+    public DailyData(double open, double high, double low, double close) {
+        this.open = open;
+        this.high = high;
+        this.low = low;
+        this.close = close;
+    }
 
-    @SerializedName("3. low")
-    private String low;
-
-    @SerializedName("4. close")
-    private String close;
-
-    @SerializedName("5. volume")
-    private String volume;
-
-    // Getters para extraer la información y convertirla a numérico
-    public double getOpen() { return Double.parseDouble(open); }
-    public double getHigh() { return Double.parseDouble(high); }
-    public double getLow() { return Double.parseDouble(low); }
-    public double getClose() { return Double.parseDouble(close); }
-    public double getVolume() { return Double.parseDouble(volume); }
+    public double getOpen() { return open; }
+    public double getHigh() { return high; }
+    public double getLow() { return low; }
+    public double getClose() { return close; }
 }
 

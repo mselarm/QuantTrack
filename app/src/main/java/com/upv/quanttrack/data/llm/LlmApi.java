@@ -7,7 +7,7 @@ import retrofit2.http.Query;
 
 public interface LlmApi {
     // Usamos el modelo flash por velocidad
-    @POST("v1beta/models/gemini-2.5-flash:generateContent")
+    @POST("v1beta/models/gemini-3.1-flash-lite-preview:generateContent")
     Call<LlmResponse> analyzeData(
             @Query("key") String apiKey,
             @Body LlmRequest request

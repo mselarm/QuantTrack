@@ -44,6 +44,8 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     // Conversor GSON para mapear JSON a objetos Java
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    //Para que pueda leer el csv(  lea respuestas HTTP como string crudos)
+    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
     // Interceptor para depurar el tráfico de red en el logcat (opcional pero recomendado)
     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")
 
@@ -52,4 +54,9 @@ dependencies {
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
     //Para hacer el FPCA
     implementation("org.apache.commons:commons-math3:3.6.1")
+    // Librería principal de Room para ejecución
+    implementation("androidx.room:room-runtime:2.6.1")
+
+    // Procesador de anotaciones de Java para generar el código SQL
+    annotationProcessor("androidx.room:room-compiler:2.6.1")
 }

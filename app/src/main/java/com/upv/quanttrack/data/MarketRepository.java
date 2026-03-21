@@ -1,126 +1,120 @@
-//package com.upv.quanttrack.data;
-//
-//import retrofit2.Call;
-//import retrofit2.Callback;
-//import retrofit2.Response;
-//import android.util.Log;
-//import java.util.Map;
-//
-//public class MarketRepository {
-//
-//    // Constante de la API Key
-//    private static final String API_KEY = "LXBYH8RH3TQTZKOP";//"F8GRLBWMGTCIAJTA"; Solo hay 25 al dia despues de eso te capan
-//
-//    private AlphaVantageApi api;
-//
-//    // 1. Definimos el contrato de retorno (El puente hacia la Interfaz Gráfica)
-//    public interface DataCallback {
-//        void onSuccess(Map<String, DailyData> data);
-//        void onError(String error);
-//    }
-//
-//    public MarketRepository() {
-//        // Inicializamos la interfaz usando el cliente Singleton
-//        api = ApiClient.getClient().create(AlphaVantageApi.class);
-//    }
-//
-//    // 2. Modificamos la firma: ahora recibe el ticker y el canal de retorno (callback)
-//    public void fetchDailyData(String ticker, DataCallback callback) {
-//
-//        Call<AlphaVantageResponse> call = api.getDailyData(ticker, API_KEY);
-//
-//        call.enqueue(new Callback<AlphaVantageResponse>() {
-//            @Override
-//            public void onResponse(Call<AlphaVantageResponse> call, Response<AlphaVantageResponse> response) {
-//                if (response.isSuccessful() && response.body() != null && response.body().getTimeSeries() != null) {
-//
-//                    // Éxito topológico: Devolvemos el mapa de datos completo al hilo principal (MainActivity)
-//                    callback.onSuccess(response.body().getTimeSeries());
-//
-//                } else {
-//                    // Si el servidor de AlphaVantage devuelve un límite de cuota o error
-//                    callback.onError("Error HTTP del servidor: " + response.code());
-//                }
-//            }
-//
-//            @Override
-//            public void onFailure(Call<AlphaVantageResponse> call, Throwable t) {
-//                // Fallo físico (ej. modo avión activado)
-//                callback.onError("Fallo físico de red: " + t.getMessage());
-//            }
-//        });
-//    }
-//}
 package com.upv.quanttrack.data;
 
-import android.os.Handler;
-import android.os.Looper;
-
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
-import java.lang.reflect.Type;
-import java.util.Calendar;
-import java.util.Locale;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+import retrofit2.Retrofit;
+import retrofit2.converter.scalars.ScalarsConverterFactory;
 
 public class MarketRepository {
+
+    private final YahooFinanceApi api;
+
+    public MarketRepository() {
+        // 1. Interceptor de Camuflaje (Bypass antibot de Yahoo)
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(15, TimeUnit.SECONDS)
+                .addInterceptor(chain -> {
+                    Request original = chain.request();
+                    Request request = original.newBuilder()
+                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+                            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+                            .method(original.method(), original.body())
+                            .build();
+                    return chain.proceed(request);
+                })
+                .build();
+
+        // 2. Cliente HTTP inyectado
+        Retrofit retrofit = new Retrofit.Builder()
+                .baseUrl("https://query1.finance.yahoo.com/")
+                .client(client)
+                .addConverterFactory(ScalarsConverterFactory.create())
+                .build();
+
+        api = retrofit.create(YahooFinanceApi.class);
+    }
 
     public interface DataCallback {
         void onSuccess(Map<String, DailyData> data);
         void onError(String error);
     }
 
-    public MarketRepository() {
-        // Inicialización vacía (hemos desconectado Retrofit temporalmente)
-    }
-
     public void fetchDailyData(String ticker, DataCallback callback) {
-        // 1. Construimos un JSON válido matemáticamente en memoria
-        StringBuilder jsonBuilder = new StringBuilder();
-        jsonBuilder.append("{");
+        // Atacamos el endpoint v8 de gráficas pidiendo velas diarias ("1d") de los últimos 2 años ("2y")
+        api.getHistoricalData(ticker, "1d", "2y").enqueue(new Callback<String>() {
+            @Override
+            public void onResponse(Call<String> call, Response<String> response) {
+                // Filtro 1: Código HTTP 404 (Not Found) a nivel de red
+                if (response.code() == 404) {
+                    callback.onError("Ticker no encontrado");
+                    return;
+                }
 
-        Calendar cal = Calendar.getInstance();
-        double precioBase = 150.0; // Precio inicial arbitrario
+                if (!response.isSuccessful() || response.body() == null) {
+                    callback.onError("HTTP " + response.code() + ": Error del servidor");
+                    return;
+                }
 
-        // Generamos 200 días de datos para que la SMA de 200 pueda existir
-        for (int i = 0; i < 200; i++) {
-            String fecha = String.format(Locale.US, "%04d-%02d-%02d",
-                    cal.get(Calendar.YEAR),
-                    cal.get(Calendar.MONTH) + 1,
-                    cal.get(Calendar.DAY_OF_MONTH));
+                try {
+                    org.json.JSONObject root = new org.json.JSONObject(response.body());
+                    org.json.JSONObject chart = root.getJSONObject("chart");
 
-            // Variación aleatoria diaria
-            double variacion = (Math.random() - 0.5) * 4.0;
-            precioBase += variacion;
+                    // Filtro 2: Yahoo devuelve HTTP 200 OK pero inyecta un nodo "error" en el JSON
+                    if (!chart.isNull("error")) {
+                        callback.onError("Ticker no encontrado");
+                        return;
+                    }
 
-            // Formato exacto que espera tu clase DailyData
-            String diaJson = String.format(Locale.US,
-                    "\"%s\": {\"1. open\": \"%.2f\", \"2. high\": \"%.2f\", \"3. low\": \"%.2f\", \"4. close\": \"%.2f\", \"5. volume\": \"1000\"}",
-                    fecha, precioBase - 1, precioBase + 2, precioBase - 2, precioBase);
+                    // --- EXTRACCIÓN DE DATOS (Lo que ya tenías) ---
+                    org.json.JSONObject result = chart.getJSONArray("result").getJSONObject(0);
+                    org.json.JSONArray timestamps = result.getJSONArray("timestamp");
 
-            jsonBuilder.append(diaJson);
+                    org.json.JSONObject quote = result.getJSONObject("indicators")
+                            .getJSONArray("quote").getJSONObject(0);
 
-            if (i < 199) {
-                jsonBuilder.append(",");
+                    org.json.JSONArray openArr = quote.getJSONArray("open");
+                    org.json.JSONArray highArr = quote.getJSONArray("high");
+                    org.json.JSONArray lowArr = quote.getJSONArray("low");
+                    org.json.JSONArray closeArr = quote.getJSONArray("close");
+
+                    Map<String, DailyData> marketData = new HashMap<>();
+
+                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+                    sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+
+                    for (int i = 0; i < timestamps.length(); i++) {
+                        if (!closeArr.isNull(i)) {
+                            long ts = timestamps.getLong(i) * 1000L;
+                            String date = sdf.format(new java.util.Date(ts));
+
+                            double open = openArr.getDouble(i);
+                            double high = highArr.getDouble(i);
+                            double low = lowArr.getDouble(i);
+                            double close = closeArr.getDouble(i);
+
+                            marketData.put(date, new DailyData(open, high, low, close));
+                        }
+                    }
+
+                    callback.onSuccess(marketData);
+
+                } catch (Exception e) {
+                    callback.onError("Fallo de parseo matricial: " + e.getMessage());
+                }
             }
-            cal.add(Calendar.DAY_OF_YEAR, -1); // Retrocedemos un día
-        }
-        jsonBuilder.append("}");
 
-        try {
-            // 2. Usamos Gson para deserializar el String directamente a tu Map<String, DailyData>
-            Type type = new TypeToken<Map<String, DailyData>>(){}.getType();
-            Map<String, DailyData> mockData = new Gson().fromJson(jsonBuilder.toString(), type);
-
-            // 3. Simulamos 0.5 segundos de latencia de red para no bloquear el UI Thread
-            new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                callback.onSuccess(mockData);
-            }, 500);
-
-        } catch (Exception e) {
-            callback.onError("Error en la inyección de datos simulados: " + e.getMessage());
-        }
+            @Override
+            public void onFailure(Call<String> call, Throwable t) {
+                callback.onError("Fallo físico de red (Timeout): " + t.getMessage());
+            }
+        });
     }
 }
-

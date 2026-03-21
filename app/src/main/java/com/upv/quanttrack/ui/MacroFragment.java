@@ -27,14 +27,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class MacroFragment extends Fragment {
+public class MacroFragment extends Fragment implements Analyzable {
 
     private LineChart yieldCurveChart;
     private LineChart temporalScoresChart;
     private TextView tvSpread;
     private TextView tvFpcaAnalysis;
     private TreasuryRepository repository;
-
+    // Variables de estado para la IA
+    private String currentDate = "";
+    private double currentSpread = 0;
+    private double varPc1 = 0, varPc2 = 0, varPc3 = 0;
+    private double lastPc1 = 0, lastPc2 = 0;
 
     // Eje X: Índices topológicos de los vencimientos
     private final String[] labelsVencimiento = new String[]{"1M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"};
@@ -144,7 +148,14 @@ public class MacroFragment extends Fragment {
                             fpcaResult.varPc1, fpcaResult.varPc2, fpcaResult.varPc3,
                             (fpcaResult.varPc1 + fpcaResult.varPc2 + fpcaResult.varPc3));
                     tvFpcaAnalysis.setText(analysis);
-
+                    // GUARDAR ESTADO PARA LA IA
+                    currentDate = curvaHoy.date;
+                    currentSpread = spread * 100;
+                    varPc1 = fpcaResult.varPc1;
+                    varPc2 = fpcaResult.varPc2;
+                    varPc3 = fpcaResult.varPc3;
+                    lastPc1 = fpcaResult.pc1Scores[0];
+                    lastPc2 = fpcaResult.pc2Scores[0];
                     // --- 4. GRAFICAR LA SERIE TEMPORAL (SCORES) ---
                     fechasFpca.clear();
                     List<Entry> entriesPC1 = new ArrayList<>();
@@ -269,5 +280,25 @@ public class MacroFragment extends Fragment {
         leftAxis.setDrawGridLines(true);
         leftAxis.setGridColor(Color.DKGRAY);
         temporalScoresChart.getAxisRight().setEnabled(false);
+    }
+    @Override
+    public String getTabName() {
+        return "Macroeconomía (Curva de Tipos y FPCA)";
+    }
+
+    @Override
+    public String getContextualData() {
+        if (currentDate.isEmpty()) return "Aún no hay datos macroeconómicos cargados.";
+
+        return String.format(Locale.US,
+                "Eres un estratega macroeconómico institucional. Analiza estos datos del Tesoro de EE.UU. " +
+                        "Fecha actual: %s. Spread 10Y-2Y: %.2f puntos básicos. " +
+                        "Análisis de Componentes Principales (FPCA): " +
+                        "PC1 (Nivel/Tipos) explica el %.2f%% de la varianza. Valor actual: %.2f (si es muy negativo, el mercado descuenta bajadas fuertes). " +
+                        "PC2 (Pendiente) explica el %.2f%%. Valor actual: %.2f (si es negativo, la curva está invertida/riesgo recesión). " +
+                        "Instrucciones: Diagnostica el régimen económico actual (¿recesión, normalización, expansión?) basándote estrictamente en la pendiente y el nivel. " +
+                        "Sé directo, usa jerga que cualquiera pueda entender y limítate a un párrafo conciso.",
+                currentDate, currentSpread, varPc1, lastPc1, varPc2, lastPc2
+        );
     }
 }

@@ -28,23 +28,29 @@ import com.github.mikephil.charting.formatter.ValueFormatter;
 import com.upv.quanttrack.R;
 import com.upv.quanttrack.data.DailyData;
 import com.upv.quanttrack.data.MarketRepository;
-import com.upv.quanttrack.data.llm.LlmRepository;
 import com.upv.quanttrack.domain.math.SimpleMovingAverage;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
-public class MicroFragment extends Fragment {
+// 1. IMPLEMENTAMOS LA INTERFAZ
+public class MicroFragment extends Fragment implements Analyzable {
 
     private CombinedChart combinedChart;
     private EditText etTicker;
     private Button btnSearch;
     private TextView tvCurrentPrice;
     private MarketRepository repository;
-    private TextView tvLlmAnalysis;
-    private LlmRepository llmRepository;
+
+    // NOTA: Hemos eliminado tvLlmAnalysis y llmRepository de aquí.
+
+    // 2. VARIABLES DE ESTADO PARA LA IA
+    private String currentTicker = "";
+    private double currentPrice = 0;
+    private double currentSma20 = 0, currentSma50 = 0, currentSma200 = 0;
 
     @Nullable
     @Override
@@ -57,9 +63,7 @@ public class MicroFragment extends Fragment {
         etTicker = view.findViewById(R.id.etTicker);
         btnSearch = view.findViewById(R.id.btnSearch);
         tvCurrentPrice = view.findViewById(R.id.tvCurrentPrice);
-        tvLlmAnalysis = view.findViewById(R.id.tvLlmAnalysis);
 
-        llmRepository = new LlmRepository();
         repository = new MarketRepository();
 
         configurarEstiloGrafico();
@@ -128,7 +132,7 @@ public class MicroFragment extends Fragment {
 
         double ultimoPrecio = closePrices[n - 1];
         String ultimaFecha = fechas.get(n - 1);
-        tvCurrentPrice.setText(ticker + " | " + ultimaFecha + " | $" + String.format("%.2f", ultimoPrecio));
+        tvCurrentPrice.setText(ticker + " | " + ultimaFecha + " | $" + String.format(Locale.US, "%.2f", ultimoPrecio));
 
         if (n > 1 && ultimoPrecio >= closePrices[n - 2]) {
             tvCurrentPrice.setTextColor(Color.GREEN);
@@ -143,6 +147,13 @@ public class MicroFragment extends Fragment {
         double[] sma20Results = sma20Calc.calculate(closePrices);
         double[] sma50Results = sma50Calc.calculate(closePrices);
         double[] sma200Results = sma200Calc.calculate(closePrices);
+
+        // 3. ACTUALIZAMOS EL ESTADO PARA CUANDO SE INVOQUE LA IA
+        currentTicker = ticker;
+        currentPrice = ultimoPrecio;
+        currentSma20 = sma20Results.length > 0 ? sma20Results[n - 1] : 0;
+        currentSma50 = sma50Results.length > 0 ? sma50Results[n - 1] : 0;
+        currentSma200 = sma200Results.length > 0 ? sma200Results[n - 1] : 0;
 
         List<Entry> lineEntries20 = new ArrayList<>();
         List<Entry> lineEntries50 = new ArrayList<>();
@@ -221,45 +232,7 @@ public class MicroFragment extends Fragment {
         combinedChart.moveViewToX(n);
         combinedChart.invalidate();
 
-        // --- INYECCIÓN AL LLM ---
-        tvLlmAnalysis.setText("Analizando topología y medias móviles con IA...");
-        tvLlmAnalysis.setTextColor(Color.YELLOW);
-
-        double ultimaSma20 = sma20Results.length > 0 ? sma20Results[n - 1] : 0;
-        double ultimaSma50 = sma50Results.length > 0 ? sma50Results[n - 1] : 0;
-        double ultimaSma200 = sma200Results.length > 0 ? sma200Results[n - 1] : 0;
-
-        String prompt = String.format(
-                "Eres un analista cuantitativo riguroso. Analiza la acción %s. " +
-                        "Precio de cierre de hoy: %.2f. " +
-                        "Media Móvil 20 días: %.2f. " +
-                        "Media Móvil 50 días: %.2f. " +
-                        "Media Móvil 200 días: %.2f. " +
-                        "Instrucciones: Evalúa la tendencia actual comparando el precio con estas medias. " +
-                        "¿Hay soporte o resistencia? ¿Es un régimen alcista o bajista? " +
-                        "Sé directo, usa lenguaje técnico financiero y limítate a un párrafo conciso. No hagas saludos.",
-                ticker, ultimoPrecio, ultimaSma20, ultimaSma50, ultimaSma200
-        );
-
-        llmRepository.analyzeMarket(prompt, new LlmRepository.LlmCallback() {
-            @Override
-            public void onSuccess(String analysis) {
-                if (getActivity() == null) return;
-                getActivity().runOnUiThread(() -> {
-                    tvLlmAnalysis.setText(analysis);
-                    tvLlmAnalysis.setTextColor(Color.WHITE);
-                });
-            }
-
-            @Override
-            public void onError(String error) {
-                if (getActivity() == null) return;
-                getActivity().runOnUiThread(() -> {
-                    tvLlmAnalysis.setText("Error al generar análisis: " + error);
-                    tvLlmAnalysis.setTextColor(Color.RED);
-                });
-            }
-        });
+        // El bloque automático de LLM que había aquí se ha eliminado.
     }
 
     private void configurarEstiloGrafico() {
@@ -272,5 +245,30 @@ public class MicroFragment extends Fragment {
         combinedChart.getAxisRight().setEnabled(false);
         combinedChart.getLegend().setTextColor(Color.WHITE);
         combinedChart.getDescription().setEnabled(false);
+    }
+
+    // 4. MÉTODOS DE LA INTERFAZ ANALYZABLE
+    @Override
+    public String getTabName() {
+        return "Microeconomía (Acciones)";
+    }
+
+    @Override
+    public String getContextualData() {
+        if (currentTicker.isEmpty() || currentPrice == 0) {
+            return "Aún no hay datos cargados para analizar.";
+        }
+
+        return String.format(Locale.US,
+                "Eres un analista cuantitativo riguroso. Analiza la acción %s. " +
+                        "Precio de cierre actual: %.2f. " +
+                        "Media Móvil 20 días: %.2f. " +
+                        "Media Móvil 50 días: %.2f. " +
+                        "Media Móvil 200 días: %.2f. " +
+                        "Instrucciones: Evalúa la tendencia actual comparando el precio con estas medias. " +
+                        "¿Hay soporte o resistencia? ¿Es un régimen alcista o bajista? " +
+                        "Sé directo, usa lenguaje que cualquiera pueda entender y limítate a un párrafo conciso. No hagas saludos.",
+                currentTicker, currentPrice, currentSma20, currentSma50, currentSma200
+        );
     }
 }

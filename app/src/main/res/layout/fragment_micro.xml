@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="8dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="8dp">
+
+        <EditText
+            android:id="@+id/etTicker"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="Ej: AAPL, TSLA, MSFT"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#888888"
+            android:textAllCaps="true" />
+
+        <Button
+            android:id="@+id/btnSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Analizar" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tvCurrentPrice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#00FF00"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="8dp"
+        android:text="Esperando datos..." />
+
+    <com.github.mikephil.charting.charts.CombinedChart
+        android:id="@+id/combinedChart"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="150dp"
+        android:layout_marginTop="8dp"
+        android:background="#1A1A1A"
+        android:padding="8dp">
+
+        <TextView
+            android:id="@+id/tvLlmAnalysis"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#CCCCCC"
+            android:textSize="14sp"
+            android:text="El análisis cuantitativo aparecerá aquí..." />
+    </ScrollView>
+</LinearLayout>

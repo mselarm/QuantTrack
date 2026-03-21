@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/tvSpread"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#AAAAAA"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:paddingBottom="4dp"
+        android:text="Cargando tensores..." />
+
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/yieldCurveChart"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="EVOLUCIÓN TEMPORAL DE LOS FACTORES (FPCA)"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:paddingTop="8dp"
+        android:paddingBottom="4dp"/>
+
+    <com.github.mikephil.charting.charts.LineChart
+        android:id="@+id/temporalScoresChart"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:id="@+id/tvFpcaAnalysis"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#CCCCCC"
+        android:textSize="12sp"
+        android:paddingTop="4dp"
+        android:text="Varianza Explicada: Calculando..." />
+
+</LinearLayout>

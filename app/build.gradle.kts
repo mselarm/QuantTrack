@@ -50,4 +50,6 @@ dependencies {
     // 2. Capa de Presentación de Datos (Módulo D)
     // MPAndroidChart para gráficos financieros (Velas y Medias Móviles)
     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
+    //Para hacer el FPCA
+    implementation("org.apache.commons:commons-math3:3.6.1")
 }

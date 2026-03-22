@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="12dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp">
+
+        <EditText
+            android:id="@+id/etVolTicker"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="TICKER (ej. NVDA)"
+            android:textColor="#FFFFFF"
+            android:textAllCaps="true"
+            android:inputType="textCapCharacters" />
+
+        <Button
+            android:id="@+id/btnAnalyzeVol"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ANALIZAR"
+            android:backgroundTint="#0066CC" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#111111"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="RIESGO DE PRECIO"
+            android:textColor="#888888"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/tvBeta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Beta (β): --"
+            android:textColor="#00FF00"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvVolPercentile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Percentil Volatilidad: --%"
+            android:textColor="#FFaa00"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#111111"
+        android:padding="12dp"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="LIQUIDEZ Y EJECUCIÓN"
+            android:textColor="#888888"
+            android:textSize="10sp" />
+
+        <TextView
+            android:id="@+id/tvATR"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="ATR (Rango Diario): $--"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/tvRVOL"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Volumen Relativo (RVOL): --"
+            android:textColor="#00FFFF"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <com.github.mikephil.charting.charts.CombinedChart
+        android:id="@+id/volCombinedChart"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout>

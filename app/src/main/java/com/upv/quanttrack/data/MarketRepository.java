@@ -73,7 +73,7 @@ public class MarketRepository {
                         return;
                     }
 
-                    // --- EXTRACCIÓN DE DATOS (Lo que ya tenías) ---
+                    // --- EXTRACCIÓN DE DATOS ---
                     org.json.JSONObject result = chart.getJSONArray("result").getJSONObject(0);
                     org.json.JSONArray timestamps = result.getJSONArray("timestamp");
 
@@ -84,6 +84,8 @@ public class MarketRepository {
                     org.json.JSONArray highArr = quote.getJSONArray("high");
                     org.json.JSONArray lowArr = quote.getJSONArray("low");
                     org.json.JSONArray closeArr = quote.getJSONArray("close");
+                    // 1. Extraemos el array de volumen del JSON
+                    org.json.JSONArray volumeArr = quote.getJSONArray("volume");
 
                     Map<String, DailyData> marketData = new HashMap<>();
 
@@ -91,7 +93,8 @@ public class MarketRepository {
                     sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
 
                     for (int i = 0; i < timestamps.length(); i++) {
-                        if (!closeArr.isNull(i)) {
+                        // 2. Exigimos que ni el cierre ni el volumen sean nulos (evita datos corruptos)
+                        if (!closeArr.isNull(i) && !volumeArr.isNull(i)) {
                             long ts = timestamps.getLong(i) * 1000L;
                             String date = sdf.format(new java.util.Date(ts));
 
@@ -99,8 +102,11 @@ public class MarketRepository {
                             double high = highArr.getDouble(i);
                             double low = lowArr.getDouble(i);
                             double close = closeArr.getDouble(i);
+                            // 3. Extraemos el valor escalar iterado
+                            double volume = volumeArr.getDouble(i);
 
-                            marketData.put(date, new DailyData(open, high, low, close));
+                            // 4. Inyectamos el volumen en el constructor de memoria
+                            marketData.put(date, new DailyData(open, high, low, close, volume));
                         }
                     }
 

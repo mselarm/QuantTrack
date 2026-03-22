@@ -39,7 +39,7 @@ public class MainActivity extends AppCompatActivity {
             } else if (itemId == R.id.nav_risk) {
                 selectedFragment = new RiskFragment();
             } else if (itemId == R.id.nav_options) {
-                selectedFragment = new Fragment();
+                selectedFragment = new VolatilityFragment();
             }
 
             if (selectedFragment != null) {

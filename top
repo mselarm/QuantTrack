@@ -1,0 +1,1650 @@
+[33mcommit 5c2088af60ab6473559edbb79aad790ad7cb7cc4[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m
+Author: mselarm <mselarm@teleco.upv.es>
+Date:   Sat Mar 21 19:30:04 2026 +0100
+
+    feat(risk): implementación de analítica cuantitativa y visualización de cartera
+    
+    - Implementación de Matriz de Correlación de activos (Pearson) para análisis de diversificación.
+    - Desarrollo de modelos de riesgo estadístico: Valor en Riesgo (VaR) y Conditional VaR (CVaR).
+    - Integración de PieChart de MPAndroidChart para la distribución porcentual del Portfolio.
+    - Configuración de persistencia local con Room (Entity, DAO, Database) para activos de riesgo.
+    - Validación de persistencia de datos (memoria no volátil) tras reinicio forzado de la App.
+
+[1mdiff --git a/app/build.gradle.kts b/app/build.gradle.kts[m
+[1mindex 4d9cb31..8d318ee 100644[m
+[1m--- a/app/build.gradle.kts[m
+[1m+++ b/app/build.gradle.kts[m
+[36m@@ -44,6 +44,8 @@[m [mdependencies {[m
+     implementation("com.squareup.retrofit2:retrofit:2.9.0")[m
+     // Conversor GSON para mapear JSON a objetos Java[m
+     implementation("com.squareup.retrofit2:converter-gson:2.9.0")[m
+[32m+[m[32m    //Para que pueda leer el csv(  lea respuestas HTTP como string crudos)[m
+[32m+[m[32m    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")[m
+     // Interceptor para depurar el tráfico de red en el logcat (opcional pero recomendado)[m
+     implementation("com.squareup.okhttp3:logging-interceptor:4.11.0")[m
+ [m
+[36m@@ -52,4 +54,9 @@[m [mdependencies {[m
+     implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")[m
+     //Para hacer el FPCA[m
+     implementation("org.apache.commons:commons-math3:3.6.1")[m
+[32m+[m[32m    // Librería principal de Room para ejecución[m
+[32m+[m[32m    implementation("androidx.room:room-runtime:2.6.1")[m
+[32m+[m
+[32m+[m[32m    // Procesador de anotaciones de Java para generar el código SQL[m
+[32m+[m[32m    annotationProcessor("androidx.room:room-compiler:2.6.1")[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/data/DailyData.java b/app/src/main/java/com/upv/quanttrack/data/DailyData.java[m
+[1mindex ced52b9..66bafa5 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/data/DailyData.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/data/DailyData.java[m
+[36m@@ -1,28 +1,23 @@[m
+ package com.upv.quanttrack.data;[m
+[31m-import com.google.gson.annotations.SerializedName;[m
+ [m
+ public class DailyData {[m
+ [m
+[31m-    @SerializedName("1. open")[m
+[31m-    private String open;[m
+[31m-[m
+[31m-    @SerializedName("2. high")[m
+[31m-    private String high;[m
+[31m-[m
+[31m-    @SerializedName("3. low")[m
+[31m-    private String low;[m
+[31m-[m
+[31m-    @SerializedName("4. close")[m
+[31m-    private String close;[m
+[31m-[m
+[31m-    @SerializedName("5. volume")[m
+[31m-    private String volume;[m
+[31m-[m
+[31m-    // Getters para extraer la información y convertirla a numérico[m
+[31m-    public double getOpen() { return Double.parseDouble(open); }[m
+[31m-    public double getHigh() { return Double.parseDouble(high); }[m
+[31m-    public double getLow() { return Double.parseDouble(low); }[m
+[31m-    public double getClose() { return Double.parseDouble(close); }[m
+[31m-    public double getVolume() { return Double.parseDouble(volume); }[m
+[32m+[m[32m    private final double open;[m
+[32m+[m[32m    private final double high;[m
+[32m+[m[32m    private final double low;[m
+[32m+[m[32m    private final double close;[m
+[32m+[m
+[32m+[m[32m    // Constructor que usa el MarketRepository al leer el CSV[m
+[32m+[m[32m    public DailyData(double open, double high, double low, double close) {[m
+[32m+[m[32m        this.open = open;[m
+[32m+[m[32m        this.high = high;[m
+[32m+[m[32m        this.low = low;[m
+[32m+[m[32m        this.close = close;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public double getOpen() { return open; }[m
+[32m+[m[32m    public double getHigh() { return high; }[m
+[32m+[m[32m    public double getLow() { return low; }[m
+[32m+[m[32m    public double getClose() { return close; }[m
+ }[m
+ [m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/data/MarketRepository.java b/app/src/main/java/com/upv/quanttrack/data/MarketRepository.java[m
+[1mindex 449365e..8ea0bcb 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/data/MarketRepository.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/data/MarketRepository.java[m
+[36m@@ -1,126 +1,120 @@[m
+[31m-//package com.upv.quanttrack.data;[m
+[31m-//[m
+[31m-//import retrofit2.Call;[m
+[31m-//import retrofit2.Callback;[m
+[31m-//import retrofit2.Response;[m
+[31m-//import android.util.Log;[m
+[31m-//import java.util.Map;[m
+[31m-//[m
+[31m-//public class MarketRepository {[m
+[31m-//[m
+[31m-//    // Constante de la API Key[m
+[31m-//    private static final String API_KEY = "LXBYH8RH3TQTZKOP";//"F8GRLBWMGTCIAJTA"; Solo hay 25 al dia despues de eso te capan[m
+[31m-//[m
+[31m-//    private AlphaVantageApi api;[m
+[31m-//[m
+[31m-//    // 1. Definimos el contrato de retorno (El puente hacia la Interfaz Gráfica)[m
+[31m-//    public interface DataCallback {[m
+[31m-//        void onSuccess(Map<String, DailyData> data);[m
+[31m-//        void onError(String error);[m
+[31m-//    }[m
+[31m-//[m
+[31m-//    public MarketRepository() {[m
+[31m-//        // Inicializamos la interfaz usando el cliente Singleton[m
+[31m-//        api = ApiClient.getClient().create(AlphaVantageApi.class);[m
+[31m-//    }[m
+[31m-//[m
+[31m-//    // 2. Modificamos la firma: ahora recibe el ticker y el canal de retorno (callback)[m
+[31m-//    public void fetchDailyData(String ticker, DataCallback callback) {[m
+[31m-//[m
+[31m-//        Call<AlphaVantageResponse> call = api.getDailyData(ticker, API_KEY);[m
+[31m-//[m
+[31m-//        call.enqueue(new Callback<AlphaVantageResponse>() {[m
+[31m-//            @Override[m
+[31m-//            public void onResponse(Call<AlphaVantageResponse> call, Response<AlphaVantageResponse> response) {[m
+[31m-//                if (response.isSuccessful() && response.body() != null && response.body().getTimeSeries() != null) {[m
+[31m-//[m
+[31m-//                    // Éxito topológico: Devolvemos el mapa de datos completo al hilo principal (MainActivity)[m
+[31m-//                    callback.onSuccess(response.body().getTimeSeries());[m
+[31m-//[m
+[31m-//                } else {[m
+[31m-//                    // Si el servidor de AlphaVantage devuelve un límite de cuota o error[m
+[31m-//                    callback.onError("Error HTTP del servidor: " + response.code());[m
+[31m-//                }[m
+[31m-//            }[m
+[31m-//[m
+[31m-//            @Override[m
+[31m-//            public void onFailure(Call<AlphaVantageResponse> call, Throwable t) {[m
+[31m-//                // Fallo físico (ej. modo avión activado)[m
+[31m-//                callback.onError("Fallo físico de red: " + t.getMessage());[m
+[31m-//            }[m
+[31m-//        });[m
+[31m-//    }[m
+[31m-//}[m
+ package com.upv.quanttrack.data;[m
+ [m
+[31m-import android.os.Handler;[m
+[31m-import android.os.Looper;[m
+[31m-[m
+[31m-import com.google.gson.Gson;[m
+[31m-import com.google.gson.reflect.TypeToken;[m
+[31m-[m
+[31m-import java.lang.reflect.Type;[m
+[31m-import java.util.Calendar;[m
+[31m-import java.util.Locale;[m
+[32m+[m[32mimport java.util.HashMap;[m
+ import java.util.Map;[m
+[32m+[m[32mimport java.util.concurrent.TimeUnit;[m
+[32m+[m
+[32m+[m[32mimport okhttp3.OkHttpClient;[m
+[32m+[m[32mimport okhttp3.Request;[m
+[32m+[m[32mimport retrofit2.Call;[m
+[32m+[m[32mimport retrofit2.Callback;[m
+[32m+[m[32mimport retrofit2.Response;[m
+[32m+[m[32mimport retrofit2.Retrofit;[m
+[32m+[m[32mimport retrofit2.converter.scalars.ScalarsConverterFactory;[m
+ [m
+ public class MarketRepository {[m
+ [m
+[32m+[m[32m    private final YahooFinanceApi api;[m
+[32m+[m
+[32m+[m[32m    public MarketRepository() {[m
+[32m+[m[32m        // 1. Interceptor de Camuflaje (Bypass antibot de Yahoo)[m
+[32m+[m[32m        OkHttpClient client = new OkHttpClient.Builder()[m
+[32m+[m[32m                .connectTimeout(15, TimeUnit.SECONDS)[m
+[32m+[m[32m                .readTimeout(15, TimeUnit.SECONDS)[m
+[32m+[m[32m                .addInterceptor(chain -> {[m
+[32m+[m[32m                    Request original = chain.request();[m
+[32m+[m[32m                    Request request = original.newBuilder()[m
+[32m+[m[32m                            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")[m
+[32m+[m[32m                            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")[m
+[32m+[m[32m                            .method(original.method(), original.body())[m
+[32m+[m[32m                            .build();[m
+[32m+[m[32m                    return chain.proceed(request);[m
+[32m+[m[32m                })[m
+[32m+[m[32m                .build();[m
+[32m+[m
+[32m+[m[32m        // 2. Cliente HTTP inyectado[m
+[32m+[m[32m        Retrofit retrofit = new Retrofit.Builder()[m
+[32m+[m[32m                .baseUrl("https://query1.finance.yahoo.com/")[m
+[32m+[m[32m                .client(client)[m
+[32m+[m[32m                .addConverterFactory(ScalarsConverterFactory.create())[m
+[32m+[m[32m                .build();[m
+[32m+[m
+[32m+[m[32m        api = retrofit.create(YahooFinanceApi.class);[m
+[32m+[m[32m    }[m
+[32m+[m
+     public interface DataCallback {[m
+         void onSuccess(Map<String, DailyData> data);[m
+         void onError(String error);[m
+     }[m
+ [m
+[31m-    public MarketRepository() {[m
+[31m-        // Inicialización vacía (hemos desconectado Retrofit temporalmente)[m
+[31m-    }[m
+[31m-[m
+     public void fetchDailyData(String ticker, DataCallback callback) {[m
+[31m-        // 1. Construimos un JSON válido matemáticamente en memoria[m
+[31m-        StringBuilder jsonBuilder = new StringBuilder();[m
+[31m-        jsonBuilder.append("{");[m
+[31m-[m
+[31m-        Calendar cal = Calendar.getInstance();[m
+[31m-        double precioBase = 150.0; // Precio inicial arbitrario[m
+[31m-[m
+[31m-        // Generamos 200 días de datos para que la SMA de 200 pueda existir[m
+[31m-        for (int i = 0; i < 200; i++) {[m
+[31m-            String fecha = String.format(Locale.US, "%04d-%02d-%02d",[m
+[31m-                    cal.get(Calendar.YEAR),[m
+[31m-                    cal.get(Calendar.MONTH) + 1,[m
+[31m-                    cal.get(Calendar.DAY_OF_MONTH));[m
+[31m-[m
+[31m-            // Variación aleatoria diaria[m
+[31m-            double variacion = (Math.random() - 0.5) * 4.0;[m
+[31m-            precioBase += variacion;[m
+[31m-[m
+[31m-            // Formato exacto que espera tu clase DailyData[m
+[31m-            String diaJson = String.format(Locale.US,[m
+[31m-                    "\"%s\": {\"1. open\": \"%.2f\", \"2. high\": \"%.2f\", \"3. low\": \"%.2f\", \"4. close\": \"%.2f\", \"5. volume\": \"1000\"}",[m
+[31m-                    fecha, precioBase - 1, precioBase + 2, precioBase - 2, precioBase);[m
+[31m-[m
+[31m-            jsonBuilder.append(diaJson);[m
+[32m+[m[32m        // Atacamos el endpoint v8 de gráficas pidiendo velas diarias ("1d") de los últimos 2 años ("2y")[m
+[32m+[m[32m        api.getHistoricalData(ticker, "1d", "2y").enqueue(new Callback<String>() {[m
+[32m+[m[32m            @Override[m
+[32m+[m[32m            public void onResponse(Call<String> call, Response<String> response) {[m
+[32m+[m[32m                // Filtro 1: Código HTTP 404 (Not Found) a nivel de red[m
+[32m+[m[32m                if (response.code() == 404) {[m
+[32m+[m[32m                    callback.onError("Ticker no encontrado");[m
+[32m+[m[32m                    return;[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                if (!response.isSuccessful() || response.body() == null) {[m
+[32m+[m[32m                    callback.onError("HTTP " + response.code() + ": Error del servidor");[m
+[32m+[m[32m                    return;[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                try {[m
+[32m+[m[32m                    org.json.JSONObject root = new org.json.JSONObject(response.body());[m
+[32m+[m[32m                    org.json.JSONObject chart = root.getJSONObject("chart");[m
+[32m+[m
+[32m+[m[32m                    // Filtro 2: Yahoo devuelve HTTP 200 OK pero inyecta un nodo "error" en el JSON[m
+[32m+[m[32m                    if (!chart.isNull("error")) {[m
+[32m+[m[32m                        callback.onError("Ticker no encontrado");[m
+[32m+[m[32m                        return;[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    // --- EXTRACCIÓN DE DATOS (Lo que ya tenías) ---[m
+[32m+[m[32m                    org.json.JSONObject result = chart.getJSONArray("result").getJSONObject(0);[m
+[32m+[m[32m                    org.json.JSONArray timestamps = result.getJSONArray("timestamp");[m
+[32m+[m
+[32m+[m[32m                    org.json.JSONObject quote = result.getJSONObject("indicators")[m
+[32m+[m[32m                            .getJSONArray("quote").getJSONObject(0);[m
+[32m+[m
+[32m+[m[32m                    org.json.JSONArray openArr = quote.getJSONArray("open");[m
+[32m+[m[32m                    org.json.JSONArray highArr = quote.getJSONArray("high");[m
+[32m+[m[32m                    org.json.JSONArray lowArr = quote.getJSONArray("low");[m
+[32m+[m[32m                    org.json.JSONArray closeArr = quote.getJSONArray("close");[m
+[32m+[m
+[32m+[m[32m                    Map<String, DailyData> marketData = new HashMap<>();[m
+[32m+[m
+[32m+[m[32m                    java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);[m
+[32m+[m[32m                    sdf.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));[m
+[32m+[m
+[32m+[m[32m                    for (int i = 0; i < timestamps.length(); i++) {[m
+[32m+[m[32m                        if (!closeArr.isNull(i)) {[m
+[32m+[m[32m                            long ts = timestamps.getLong(i) * 1000L;[m
+[32m+[m[32m                            String date = sdf.format(new java.util.Date(ts));[m
+[32m+[m
+[32m+[m[32m                            double open = openArr.getDouble(i);[m
+[32m+[m[32m                            double high = highArr.getDouble(i);[m
+[32m+[m[32m                            double low = lowArr.getDouble(i);[m
+[32m+[m[32m                            double close = closeArr.getDouble(i);[m
+[32m+[m
+[32m+[m[32m                            marketData.put(date, new DailyData(open, high, low, close));[m
+[32m+[m[32m                        }[m
+[32m+[m[32m                    }[m
+[32m+[m
+[32m+[m[32m                    callback.onSuccess(marketData);[m
+[32m+[m
+[32m+[m[32m                } catch (Exception e) {[m
+[32m+[m[32m                    callback.onError("Fallo de parseo matricial: " + e.getMessage());[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+ [m
+[31m-            if (i < 199) {[m
+[31m-                jsonBuilder.append(",");[m
+[32m+[m[32m            @Override[m
+[32m+[m[32m            public void onFailure(Call<String> call, Throwable t) {[m
+[32m+[m[32m                callback.onError("Fallo físico de red (Timeout): " + t.getMessage());[m
+             }[m
+[31m-            cal.add(Calendar.DAY_OF_YEAR, -1); // Retrocedemos un día[m
+[31m-        }[m
+[31m-        jsonBuilder.append("}");[m
+[31m-[m
+[31m-        try {[m
+[31m-            // 2. Usamos Gson para deserializar el String directamente a tu Map<String, DailyData>[m
+[31m-            Type type = new TypeToken<Map<String, DailyData>>(){}.getType();[m
+[31m-            Map<String, DailyData> mockData = new Gson().fromJson(jsonBuilder.toString(), type);[m
+[31m-[m
+[31m-            // 3. Simulamos 0.5 segundos de latencia de red para no bloquear el UI Thread[m
+[31m-            new Handler(Looper.getMainLooper()).postDelayed(() -> {[m
+[31m-                callback.onSuccess(mockData);[m
+[31m-            }, 500);[m
+[31m-[m
+[31m-        } catch (Exception e) {[m
+[31m-            callback.onError("Error en la inyección de datos simulados: " + e.getMessage());[m
+[31m-        }[m
+[32m+[m[32m        });[m
+     }[m
+[31m-}[m
+[31m-[m
+[32m+[m[32m}[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/data/YahooFinanceApi.java b/app/src/main/java/com/upv/quanttrack/data/YahooFinanceApi.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..5e69be1[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/data/YahooFinanceApi.java[m
+[36m@@ -0,0 +1,16 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.data;[m
+[32m+[m
+[32m+[m[32mimport retrofit2.Call;[m
+[32m+[m[32mimport retrofit2.http.GET;[m
+[32m+[m[32mimport retrofit2.http.Path;[m
+[32m+[m[32mimport retrofit2.http.Query;[m
+[32m+[m
+[32m+[m[32mpublic interface YahooFinanceApi {[m
+[32m+[m[32m    // Usamos el endpoint v8 de gráficos, que no exige validación por 'crumb'[m
+[32m+[m[32m    @GET("v8/finance/chart/{ticker}")[m
+[32m+[m[32m    Call<String> getHistoricalData([m
+[32m+[m[32m            @Path("ticker") String ticker,[m
+[32m+[m[32m            @Query("interval") String interval,[m
+[32m+[m[32m            @Query("range") String range[m
+[32m+[m[32m    );[m
+[32m+[m[32m}[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/data/llm/LlmApi.java b/app/src/main/java/com/upv/quanttrack/data/llm/LlmApi.java[m
+[1mindex dbc3bd6..d450db8 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/data/llm/LlmApi.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/data/llm/LlmApi.java[m
+[36m@@ -7,7 +7,7 @@[m [mimport retrofit2.http.Query;[m
+ [m
+ public interface LlmApi {[m
+     // Usamos el modelo flash por velocidad[m
+[31m-    @POST("v1beta/models/gemini-2.5-flash:generateContent")[m
+[32m+[m[32m    @POST("v1beta/models/gemini-3.1-flash-lite-preview:generateContent")[m
+     Call<LlmResponse> analyzeData([m
+             @Query("key") String apiKey,[m
+             @Body LlmRequest request[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryClient.java b/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryClient.java[m
+[1mindex a828a2a..a414f2f 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryClient.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryClient.java[m
+[36m@@ -1,5 +1,7 @@[m
+ package com.upv.quanttrack.data.macro;[m
+ [m
+[32m+[m[32mimport java.util.concurrent.TimeUnit;[m
+[32m+[m[32mimport okhttp3.OkHttpClient;[m
+ import retrofit2.Retrofit;[m
+ [m
+ public class TreasuryClient {[m
+[36m@@ -9,8 +11,18 @@[m [mpublic class TreasuryClient {[m
+ [m
+     public static Retrofit getClient() {[m
+         if (retrofit == null) {[m
+[32m+[m
+[32m+[m[32m            // 1. Construimos el cliente tolerante a la latencia del gobierno[m
+[32m+[m[32m            OkHttpClient okHttpClient = new OkHttpClient.Builder()[m
+[32m+[m[32m                    .connectTimeout(30, TimeUnit.SECONDS) // 30s para establecer conexión[m
+[32m+[m[32m                    .readTimeout(30, TimeUnit.SECONDS)    // 30s para descargar el CSV[m
+[32m+[m[32m                    .writeTimeout(30, TimeUnit.SECONDS)[m
+[32m+[m[32m                    .build();[m
+[32m+[m
+[32m+[m[32m            // 2. Ensamblamos Retrofit inyectando nuestro cliente[m
+             retrofit = new Retrofit.Builder()[m
+                     .baseUrl(BASE_URL)[m
+[32m+[m[32m                    .client(okHttpClient) // <--- Aquí blindamos la conexión[m
+                     // Eliminamos el GsonConverterFactory. Vamos a leer el String crudo.[m
+                     .build();[m
+         }[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryRepository.java b/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryRepository.java[m
+[1mindex cff4dcd..e0e0fa5 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryRepository.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/data/macro/TreasuryRepository.java[m
+[36m@@ -3,7 +3,6 @@[m [mpackage com.upv.quanttrack.data.macro;[m
+ import java.io.IOException;[m
+ import java.util.ArrayList;[m
+ import java.util.List;[m
+[31m-[m
+ import okhttp3.ResponseBody;[m
+ import retrofit2.Call;[m
+ import retrofit2.Callback;[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/domain/math/RiskEngine.java b/app/src/main/java/com/upv/quanttrack/domain/math/RiskEngine.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..1cabb5e[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/domain/math/RiskEngine.java[m
+[36m@@ -0,0 +1,87 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.domain.math;[m
+[32m+[m
+[32m+[m[32mimport org.apache.commons.math3.linear.Array2DRowRealMatrix;[m
+[32m+[m[32mimport org.apache.commons.math3.linear.RealMatrix;[m
+[32m+[m[32mimport org.apache.commons.math3.stat.correlation.Covariance;[m
+[32m+[m
+[32m+[m[32mimport java.util.Arrays;[m
+[32m+[m
+[32m+[m[32mpublic class RiskEngine {[m
+[32m+[m
+[32m+[m[32m    private static final double Z_SCORE_95 = 1.645;[m
+[32m+[m[32m    private static final int TRADING_DAYS_YEAR = 252;[m
+[32m+[m
+[32m+[m[32m    public RiskResult calculatePortfolioRisk(double[][] returnsMatrix, double[] weights, double notional) {[m
+[32m+[m
+[32m+[m[32m        int nDays = returnsMatrix.length;[m
+[32m+[m[32m        int mAssets = weights.length;[m
+[32m+[m
+[32m+[m[32m        // 1. Matriz de Covarianza Empírica (Sigma)[m
+[32m+[m[32m        RealMatrix returnsRealMatrix = new Array2DRowRealMatrix(returnsMatrix);[m
+[32m+[m[32m        Covariance covariance = new Covariance(returnsRealMatrix);[m
+[32m+[m[32m        RealMatrix covMatrix = covariance.getCovarianceMatrix();[m
+[32m+[m
+[32m+[m[32m        // 2. Varianza de la Cartera (Paramétrica)[m
+[32m+[m[32m        RealMatrix w = new Array2DRowRealMatrix(weights);[m
+[32m+[m[32m        RealMatrix wT = w.transpose();[m
+[32m+[m
+[32m+[m[32m        RealMatrix portfolioVarianceMatrix = wT.multiply(covMatrix).multiply(w);[m
+[32m+[m[32m        double dailyVolatility = Math.sqrt(portfolioVarianceMatrix.getEntry(0, 0));[m
+[32m+[m[32m        double annualizedVolatility = dailyVolatility * Math.sqrt(TRADING_DAYS_YEAR);[m
+[32m+[m[32m        double var95 = notional * Z_SCORE_95 * dailyVolatility;[m
+[32m+[m
+[32m+[m[32m        // 3. Matriz de Correlación (Normalización de la Covarianza)[m
+[32m+[m[32m        // rho_ij = cov_ij / (sigma_i * sigma_j)[m
+[32m+[m[32m        double[][] corrMatrix = new double[mAssets][mAssets];[m
+[32m+[m[32m        for (int i = 0; i < mAssets; i++) {[m
+[32m+[m[32m            for (int j = 0; j < mAssets; j++) {[m
+[32m+[m[32m                corrMatrix[i][j] = covMatrix.getEntry(i, j) /[m
+[32m+[m[32m                        (Math.sqrt(covMatrix.getEntry(i, i)) * Math.sqrt(covMatrix.getEntry(j, j)));[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // 4. Expected Shortfall (CVaR Empírico al 95%)[m
+[32m+[m[32m        // Proyectamos los retornos históricos sobre los pesos actuales[m
+[32m+[m[32m        double[] portfolioReturns = new double[nDays];[m
+[32m+[m[32m        for (int t = 0; t < nDays; t++) {[m
+[32m+[m[32m            double dailyRet = 0.0;[m
+[32m+[m[32m            for (int j = 0; j < mAssets; j++) {[m
+[32m+[m[32m                dailyRet += weights[j] * returnsMatrix[t][j];[m
+[32m+[m[32m            }[m
+[32m+[m[32m            portfolioReturns[t] = dailyRet;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Ordenamos de peor a mejor retorno (cola izquierda primero)[m
+[32m+[m[32m        Arrays.sort(portfolioReturns);[m
+[32m+[m
+[32m+[m[32m        // Calculamos la esperanza del 5% de los peores escenarios (cola gorda)[m
+[32m+[m[32m        int tailIndex = (int) Math.ceil(nDays * 0.05);[m
+[32m+[m[32m        double sumTail = 0.0;[m
+[32m+[m[32m        for (int t = 0; t < tailIndex; t++) {[m
+[32m+[m[32m            sumTail += portfolioReturns[t];[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Evitamos división por cero si la muestra es muy pequeña[m
+[32m+[m[32m        double expectedShortfallReturn = tailIndex > 0 ? (sumTail / tailIndex) : 0.0;[m
+[32m+[m[32m        double cVar95 = Math.abs(expectedShortfallReturn) * notional;[m
+[32m+[m
+[32m+[m[32m        return new RiskResult(annualizedVolatility, var95, cVar95, covMatrix.getData(), corrMatrix);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public static class RiskResult {[m
+[32m+[m[32m        public final double annualizedVolatility;[m
+[32m+[m[32m        public final double var95;[m
+[32m+[m[32m        public final double cVar95;[m
+[32m+[m[32m        public final double[][] covarianceMatrix;[m
+[32m+[m[32m        public final double[][] correlationMatrix;[m
+[32m+[m
+[32m+[m[32m        public RiskResult(double annualizedVolatility, double var95, double cVar95,[m
+[32m+[m[32m                          double[][] covarianceMatrix, double[][] correlationMatrix) {[m
+[32m+[m[32m            this.annualizedVolatility = annualizedVolatility;[m
+[32m+[m[32m            this.var95 = var95;[m
+[32m+[m[32m            this.cVar95 = cVar95;[m
+[32m+[m[32m            this.covarianceMatrix = covarianceMatrix;[m
+[32m+[m[32m            this.correlationMatrix = correlationMatrix;[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/domain/portfolio/AppDatabase.java b/app/src/main/java/com/upv/quanttrack/domain/portfolio/AppDatabase.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..89ec03a[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/domain/portfolio/AppDatabase.java[m
+[36m@@ -0,0 +1,30 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.domain.portfolio;[m
+[32m+[m
+[32m+[m
+[32m+[m[32mimport android.content.Context;[m
+[32m+[m
+[32m+[m[32mimport androidx.room.Database;[m
+[32m+[m[32mimport androidx.room.Room;[m
+[32m+[m[32mimport androidx.room.RoomDatabase;[m
+[32m+[m
+[32m+[m[32m// Versión 1 del esquema. Si en el futuro añades más variables (ej. precio de compra), subirás la versión.[m
+[32m+[m[32m@Database(entities = {PortfolioAsset.class}, version = 1, exportSchema = false)[m
+[32m+[m[32mpublic abstract class AppDatabase extends RoomDatabase {[m
+[32m+[m
+[32m+[m[32m    public abstract PortfolioDao portfolioDao();[m
+[32m+[m
+[32m+[m[32m    private static volatile AppDatabase INSTANCE;[m
+[32m+[m
+[32m+[m[32m    public static AppDatabase getDatabase(final Context context) {[m
+[32m+[m[32m        if (INSTANCE == null) {[m
+[32m+[m[32m            synchronized (AppDatabase.class) {[m
+[32m+[m[32m                if (INSTANCE == null) {[m
+[32m+[m[32m                    INSTANCE = Room.databaseBuilder(context.getApplicationContext(),[m
+[32m+[m[32m                                    AppDatabase.class, "quant_track_database")[m
+[32m+[m[32m                            .build();[m
+[32m+[m[32m                }[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m[32m        return INSTANCE;[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/domain/portfolio/PortfolioAsset.java b/app/src/main/java/com/upv/quanttrack/domain/portfolio/PortfolioAsset.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..6ece1c0[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/domain/portfolio/PortfolioAsset.java[m
+[36m@@ -0,0 +1,25 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.domain.portfolio;[m
+[32m+[m
+[32m+[m[32mimport androidx.annotation.NonNull;[m
+[32m+[m[32mimport androidx.room.Entity;[m
+[32m+[m[32mimport androidx.room.PrimaryKey;[m
+[32m+[m
+[32m+[m[32m@Entity(tableName = "portfolio_table")[m
+[32m+[m[32mpublic class PortfolioAsset {[m
+[32m+[m
+[32m+[m[32m    // El ticker actúa como clave primaria para evitar activos duplicados[m
+[32m+[m[32m    @PrimaryKey[m
+[32m+[m[32m    @NonNull[m
+[32m+[m[32m    private String ticker;[m
+[32m+[m
+[32m+[m[32m    private double shares;[m
+[32m+[m
+[32m+[m[32m    public PortfolioAsset(@NonNull String ticker, double shares) {[m
+[32m+[m[32m        this.ticker = ticker;[m
+[32m+[m[32m        this.shares = shares;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    @NonNull[m
+[32m+[m[32m    public String getTicker() { return ticker; }[m
+[32m+[m[32m    public double getShares() { return shares; }[m
+[32m+[m[32m}[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/domain/portfolio/PortfolioDao.java b/app/src/main/java/com/upv/quanttrack/domain/portfolio/PortfolioDao.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..6e4fc0a[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/domain/portfolio/PortfolioDao.java[m
+[36m@@ -0,0 +1,29 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.domain.portfolio;[m
+[32m+[m
+[32m+[m
+[32m+[m
+[32m+[m[32mimport androidx.room.Dao;[m
+[32m+[m[32mimport androidx.room.Insert;[m
+[32m+[m[32mimport androidx.room.OnConflictStrategy;[m
+[32m+[m[32mimport androidx.room.Query;[m
+[32m+[m
+[32m+[m[32mimport java.util.List;[m
+[32m+[m
+[32m+[m[32m@Dao[m
+[32m+[m[32mpublic interface PortfolioDao {[m
+[32m+[m
+[32m+[m[32m    // Estrategia REPLACE: Si insertas AAPL y ya existe, actualiza sus acciones (Upsert)[m
+[32m+[m[32m    @Insert(onConflict = OnConflictStrategy.REPLACE)[m
+[32m+[m[32m    void insertAsset(PortfolioAsset asset);[m
+[32m+[m
+[32m+[m[32m    @Query("DELETE FROM portfolio_table WHERE ticker = :ticker")[m
+[32m+[m[32m    void deleteAsset(String ticker);[m
+[32m+[m
+[32m+[m[32m    // Truncate de la tabla para el botón CLR[m
+[32m+[m[32m    @Query("DELETE FROM portfolio_table")[m
+[32m+[m[32m    void clearPortfolio();[m
+[32m+[m
+[32m+[m[32m    // Extracción secuencial del vector de estado al arrancar la app[m
+[32m+[m[32m    @Query("SELECT * FROM portfolio_table")[m
+[32m+[m[32m    List<PortfolioAsset> getAllAssets();[m
+[32m+[m[32m}[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/ui/Analyzable.java b/app/src/main/java/com/upv/quanttrack/ui/Analyzable.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..939f9a4[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/ui/Analyzable.java[m
+[36m@@ -0,0 +1,9 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.ui;[m
+[32m+[m
+[32m+[m[32mpublic interface Analyzable {[m
+[32m+[m[32m    // Devuelve el nombre de la pestaña actual[m
+[32m+[m[32m    String getTabName();[m
+[32m+[m
+[32m+[m[32m    // Devuelve el prompt técnico crudo listo para Gemini[m
+[32m+[m[32m    String getContextualData();[m
+[32m+[m[32m}[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/ui/MacroFragment.java b/app/src/main/java/com/upv/quanttrack/ui/MacroFragment.java[m
+[1mindex 4eb23f9..1424805 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/ui/MacroFragment.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/ui/MacroFragment.java[m
+[36m@@ -27,14 +27,18 @@[m [mimport java.util.ArrayList;[m
+ import java.util.List;[m
+ import java.util.Locale;[m
+ [m
+[31m-public class MacroFragment extends Fragment {[m
+[32m+[m[32mpublic class MacroFragment extends Fragment implements Analyzable {[m
+ [m
+     private LineChart yieldCurveChart;[m
+     private LineChart temporalScoresChart;[m
+     private TextView tvSpread;[m
+     private TextView tvFpcaAnalysis;[m
+     private TreasuryRepository repository;[m
+[31m-[m
+[32m+[m[32m    // Variables de estado para la IA[m
+[32m+[m[32m    private String currentDate = "";[m
+[32m+[m[32m    private double currentSpread = 0;[m
+[32m+[m[32m    private double varPc1 = 0, varPc2 = 0, varPc3 = 0;[m
+[32m+[m[32m    private double lastPc1 = 0, lastPc2 = 0;[m
+ [m
+     // Eje X: Índices topológicos de los vencimientos[m
+     private final String[] labelsVencimiento = new String[]{"1M", "3M", "6M", "1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "20Y", "30Y"};[m
+[36m@@ -144,7 +148,14 @@[m [mpublic class MacroFragment extends Fragment {[m
+                             fpcaResult.varPc1, fpcaResult.varPc2, fpcaResult.varPc3,[m
+                             (fpcaResult.varPc1 + fpcaResult.varPc2 + fpcaResult.varPc3));[m
+                     tvFpcaAnalysis.setText(analysis);[m
+[31m-[m
+[32m+[m[32m                    // GUARDAR ESTADO PARA LA IA[m
+[32m+[m[32m                    currentDate = curvaHoy.date;[m
+[32m+[m[32m                    currentSpread = spread * 100;[m
+[32m+[m[32m                    varPc1 = fpcaResult.varPc1;[m
+[32m+[m[32m                    varPc2 = fpcaResult.varPc2;[m
+[32m+[m[32m                    varPc3 = fpcaResult.varPc3;[m
+[32m+[m[32m                    lastPc1 = fpcaResult.pc1Scores[0];[m
+[32m+[m[32m                    lastPc2 = fpcaResult.pc2Scores[0];[m
+                     // --- 4. GRAFICAR LA SERIE TEMPORAL (SCORES) ---[m
+                     fechasFpca.clear();[m
+                     List<Entry> entriesPC1 = new ArrayList<>();[m
+[36m@@ -270,4 +281,24 @@[m [mpublic class MacroFragment extends Fragment {[m
+         leftAxis.setGridColor(Color.DKGRAY);[m
+         temporalScoresChart.getAxisRight().setEnabled(false);[m
+     }[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public String getTabName() {[m
+[32m+[m[32m        return "Macroeconomía (Curva de Tipos y FPCA)";[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public String getContextualData() {[m
+[32m+[m[32m        if (currentDate.isEmpty()) return "Aún no hay datos macroeconómicos cargados.";[m
+[32m+[m
+[32m+[m[32m        return String.format(Locale.US,[m
+[32m+[m[32m                "Eres un estratega macroeconómico institucional. Analiza estos datos del Tesoro de EE.UU. " +[m
+[32m+[m[32m                        "Fecha actual: %s. Spread 10Y-2Y: %.2f puntos básicos. " +[m
+[32m+[m[32m                        "Análisis de Componentes Principales (FPCA): " +[m
+[32m+[m[32m                        "PC1 (Nivel/Tipos) explica el %.2f%% de la varianza. Valor actual: %.2f (si es muy negativo, el mercado descuenta bajadas fuertes). " +[m
+[32m+[m[32m                        "PC2 (Pendiente) explica el %.2f%%. Valor actual: %.2f (si es negativo, la curva está invertida/riesgo recesión). " +[m
+[32m+[m[32m                        "Instrucciones: Diagnostica el régimen económico actual (¿recesión, normalización, expansión?) basándote estrictamente en la pendiente y el nivel. " +[m
+[32m+[m[32m                        "Sé directo, usa jerga que cualquiera pueda entender y limítate a un párrafo conciso.",[m
+[32m+[m[32m                currentDate, currentSpread, varPc1, lastPc1, varPc2, lastPc2[m
+[32m+[m[32m        );[m
+[32m+[m[32m    }[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/ui/MainActivity.java b/app/src/main/java/com/upv/quanttrack/ui/MainActivity.java[m
+[1mindex be07479..a34bd45 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/ui/MainActivity.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/ui/MainActivity.java[m
+[36m@@ -1,20 +1,30 @@[m
+ package com.upv.quanttrack.ui;[m
+ [m
+ import android.os.Bundle;[m
+[32m+[m[32mimport android.widget.Toast;[m
+[32m+[m
+[32m+[m[32mimport androidx.appcompat.app.AlertDialog;[m
+ import androidx.appcompat.app.AppCompatActivity;[m
+ import androidx.fragment.app.Fragment;[m
+[32m+[m
+ import com.google.android.material.bottomnavigation.BottomNavigationView;[m
+[32m+[m[32mimport com.google.android.material.floatingactionbutton.FloatingActionButton;[m
+ import com.upv.quanttrack.R;[m
+[32m+[m[32mimport com.upv.quanttrack.data.llm.LlmRepository;[m
+ [m
+ public class MainActivity extends AppCompatActivity {[m
+ [m
+[32m+[m[32m    // 1. Declaración a nivel de clase (fuera de los métodos)[m
+[32m+[m[32m    private LlmRepository llmRepository;[m
+[32m+[m
+     @Override[m
+     protected void onCreate(Bundle savedInstanceState) {[m
+         super.onCreate(savedInstanceState);[m
+[31m-[m
+[31m-        // Carga el diseño del contenedor y la barra inferior que creamos antes[m
+         setContentView(R.layout.activity_main);[m
+ [m
+[32m+[m[32m        // 2. Instanciamos el motor de IA[m
+[32m+[m[32m        llmRepository = new LlmRepository();[m
+[32m+[m
+         BottomNavigationView bottomNav = findViewById(R.id.bottom_navigation);[m
+ [m
+         // Lógica de enrutamiento[m
+[36m@@ -23,14 +33,12 @@[m [mpublic class MainActivity extends AppCompatActivity {[m
+ [m
+             int itemId = item.getItemId();[m
+             if (itemId == R.id.nav_micro) {[m
+[31m-                selectedFragment = new MicroFragment(); // Carga tu gráfica actual[m
+[32m+[m[32m                selectedFragment = new MicroFragment();[m
+             } else if (itemId == R.id.nav_macro) {[m
+                 selectedFragment = new MacroFragment();[m
+             } else if (itemId == R.id.nav_risk) {[m
+[31m-                // Aquí irá el VaR más adelante[m
+[31m-                selectedFragment = new Fragment();[m
+[32m+[m[32m                selectedFragment = new RiskFragment();[m
+             } else if (itemId == R.id.nav_options) {[m
+[31m-                // Aquí irá Black-Scholes más adelante[m
+                 selectedFragment = new Fragment();[m
+             }[m
+ [m
+[36m@@ -42,9 +50,60 @@[m [mpublic class MainActivity extends AppCompatActivity {[m
+             return true;[m
+         });[m
+ [m
+[31m-        // 3. Forzar la carga de la Pestaña Micro por defecto al abrir la app[m
+[32m+[m[32m        // Forzar la carga de la Pestaña Micro por defecto[m
+         if (savedInstanceState == null) {[m
+             bottomNav.setSelectedItemId(R.id.nav_micro);[m
+         }[m
+[32m+[m
+[32m+[m[32m        // 3. El interceptor del Botón Flotante (FAB)[m
+[32m+[m[32m        FloatingActionButton fabGemini = findViewById(R.id.fabGemini);[m
+[32m+[m[32m        fabGemini.setOnClickListener(v -> {[m
+[32m+[m[32m            // Buscamos exactamente qué fragmento está metido en el contenedor ahora mismo[m
+[32m+[m[32m            Fragment currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);[m
+[32m+[m
+[32m+[m[32m            // Verificamos si ese fragmento ha firmado nuestro contrato "Analyzable"[m
+[32m+[m[32m            if (currentFragment instanceof Analyzable) {[m
+[32m+[m[32m                Analyzable analyzableTab = (Analyzable) currentFragment;[m
+[32m+[m[32m                String prompt = analyzableTab.getContextualData();[m
+[32m+[m[32m                String tabName = analyzableTab.getTabName();[m
+[32m+[m
+[32m+[m[32m                // Mostramos el popup y llamamos a la API[m
+[32m+[m[32m                mostrarDialogoIA(tabName, prompt);[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                Toast.makeText(this, "Esta pestaña aún no soporta análisis por IA.", Toast.LENGTH_SHORT).show();[m
+[32m+[m[32m            }[m
+[32m+[m[32m        });[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // 4. El motor visual del Popup[m
+[32m+[m[32m    private void mostrarDialogoIA(String tabName, String prompt) {[m
+[32m+[m[32m        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);[m
+[32m+[m[32m        builder.setTitle("Gemini Pro - " + tabName);[m
+[32m+[m[32m        builder.setMessage("Analizando tensores matemáticos...\nPor favor, espera.");[m
+[32m+[m[32m        builder.setCancelable(false); // Bloquea toques fuera de la ventana[m
+[32m+[m
+[32m+[m[32m        AlertDialog dialog = builder.create();[m
+[32m+[m[32m        dialog.show();[m
+[32m+[m
+[32m+[m[32m        // Disparamos la petición a la red[m
+[32m+[m[32m        llmRepository.analyzeMarket(prompt, new LlmRepository.LlmCallback() {[m
+[32m+[m[32m            @Override[m
+[32m+[m[32m            public void onSuccess(String analysis) {[m
+[32m+[m[32m                runOnUiThread(() -> {[m
+[32m+[m[32m                    dialog.setMessage(analysis);[m
+[32m+[m[32m                    dialog.setCancelable(true);[m
+[32m+[m[32m                    dialog.setButton(AlertDialog.BUTTON_POSITIVE, "Entendido", (d, which) -> d.dismiss());[m
+[32m+[m[32m                });[m
+[32m+[m[32m            }[m
+[32m+[m
+[32m+[m[32m            @Override[m
+[32m+[m[32m            public void onError(String error) {[m
+[32m+[m[32m                runOnUiThread(() -> {[m
+[32m+[m[32m                    dialog.setMessage("Fallo de conexión: " + error);[m
+[32m+[m[32m                    dialog.setCancelable(true);[m
+[32m+[m[32m                    dialog.setButton(AlertDialog.BUTTON_POSITIVE, "Cerrar", (d, which) -> d.dismiss());[m
+[32m+[m[32m                });[m
+[32m+[m[32m            }[m
+[32m+[m[32m        });[m
+     }[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/ui/MicroFragment.java b/app/src/main/java/com/upv/quanttrack/ui/MicroFragment.java[m
+[1mindex 145cef4..ec48edb 100644[m
+[1m--- a/app/src/main/java/com/upv/quanttrack/ui/MicroFragment.java[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/ui/MicroFragment.java[m
+[36m@@ -28,23 +28,29 @@[m [mimport com.github.mikephil.charting.formatter.ValueFormatter;[m
+ import com.upv.quanttrack.R;[m
+ import com.upv.quanttrack.data.DailyData;[m
+ import com.upv.quanttrack.data.MarketRepository;[m
+[31m-import com.upv.quanttrack.data.llm.LlmRepository;[m
+ import com.upv.quanttrack.domain.math.SimpleMovingAverage;[m
+ [m
+ import java.util.ArrayList;[m
+ import java.util.Collections;[m
+ import java.util.List;[m
+[32m+[m[32mimport java.util.Locale;[m
+ import java.util.Map;[m
+ [m
+[31m-public class MicroFragment extends Fragment {[m
+[32m+[m[32m// 1. IMPLEMENTAMOS LA INTERFAZ[m
+[32m+[m[32mpublic class MicroFragment extends Fragment implements Analyzable {[m
+ [m
+     private CombinedChart combinedChart;[m
+     private EditText etTicker;[m
+     private Button btnSearch;[m
+     private TextView tvCurrentPrice;[m
+     private MarketRepository repository;[m
+[31m-    private TextView tvLlmAnalysis;[m
+[31m-    private LlmRepository llmRepository;[m
+[32m+[m
+[32m+[m[32m    // NOTA: Hemos eliminado tvLlmAnalysis y llmRepository de aquí.[m
+[32m+[m
+[32m+[m[32m    // 2. VARIABLES DE ESTADO PARA LA IA[m
+[32m+[m[32m    private String currentTicker = "";[m
+[32m+[m[32m    private double currentPrice = 0;[m
+[32m+[m[32m    private double currentSma20 = 0, currentSma50 = 0, currentSma200 = 0;[m
+ [m
+     @Nullable[m
+     @Override[m
+[36m@@ -57,9 +63,7 @@[m [mpublic class MicroFragment extends Fragment {[m
+         etTicker = view.findViewById(R.id.etTicker);[m
+         btnSearch = view.findViewById(R.id.btnSearch);[m
+         tvCurrentPrice = view.findViewById(R.id.tvCurrentPrice);[m
+[31m-        tvLlmAnalysis = view.findViewById(R.id.tvLlmAnalysis);[m
+ [m
+[31m-        llmRepository = new LlmRepository();[m
+         repository = new MarketRepository();[m
+ [m
+         configurarEstiloGrafico();[m
+[36m@@ -128,7 +132,7 @@[m [mpublic class MicroFragment extends Fragment {[m
+ [m
+         double ultimoPrecio = closePrices[n - 1];[m
+         String ultimaFecha = fechas.get(n - 1);[m
+[31m-        tvCurrentPrice.setText(ticker + " | " + ultimaFecha + " | $" + String.format("%.2f", ultimoPrecio));[m
+[32m+[m[32m        tvCurrentPrice.setText(ticker + " | " + ultimaFecha + " | $" + String.format(Locale.US, "%.2f", ultimoPrecio));[m
+ [m
+         if (n > 1 && ultimoPrecio >= closePrices[n - 2]) {[m
+             tvCurrentPrice.setTextColor(Color.GREEN);[m
+[36m@@ -144,6 +148,13 @@[m [mpublic class MicroFragment extends Fragment {[m
+         double[] sma50Results = sma50Calc.calculate(closePrices);[m
+         double[] sma200Results = sma200Calc.calculate(closePrices);[m
+ [m
+[32m+[m[32m        // 3. ACTUALIZAMOS EL ESTADO PARA CUANDO SE INVOQUE LA IA[m
+[32m+[m[32m        currentTicker = ticker;[m
+[32m+[m[32m        currentPrice = ultimoPrecio;[m
+[32m+[m[32m        currentSma20 = sma20Results.length > 0 ? sma20Results[n - 1] : 0;[m
+[32m+[m[32m        currentSma50 = sma50Results.length > 0 ? sma50Results[n - 1] : 0;[m
+[32m+[m[32m        currentSma200 = sma200Results.length > 0 ? sma200Results[n - 1] : 0;[m
+[32m+[m
+         List<Entry> lineEntries20 = new ArrayList<>();[m
+         List<Entry> lineEntries50 = new ArrayList<>();[m
+         List<Entry> lineEntries200 = new ArrayList<>();[m
+[36m@@ -221,45 +232,7 @@[m [mpublic class MicroFragment extends Fragment {[m
+         combinedChart.moveViewToX(n);[m
+         combinedChart.invalidate();[m
+ [m
+[31m-        // --- INYECCIÓN AL LLM ---[m
+[31m-        tvLlmAnalysis.setText("Analizando topología y medias móviles con IA...");[m
+[31m-        tvLlmAnalysis.setTextColor(Color.YELLOW);[m
+[31m-[m
+[31m-        double ultimaSma20 = sma20Results.length > 0 ? sma20Results[n - 1] : 0;[m
+[31m-        double ultimaSma50 = sma50Results.length > 0 ? sma50Results[n - 1] : 0;[m
+[31m-        double ultimaSma200 = sma200Results.length > 0 ? sma200Results[n - 1] : 0;[m
+[31m-[m
+[31m-        String prompt = String.format([m
+[31m-                "Eres un analista cuantitativo riguroso. Analiza la acción %s. " +[m
+[31m-                        "Precio de cierre de hoy: %.2f. " +[m
+[31m-                        "Media Móvil 20 días: %.2f. " +[m
+[31m-                        "Media Móvil 50 días: %.2f. " +[m
+[31m-                        "Media Móvil 200 días: %.2f. " +[m
+[31m-                        "Instrucciones: Evalúa la tendencia actual comparando el precio con estas medias. " +[m
+[31m-                        "¿Hay soporte o resistencia? ¿Es un régimen alcista o bajista? " +[m
+[31m-                        "Sé directo, usa lenguaje técnico financiero y limítate a un párrafo conciso. No hagas saludos.",[m
+[31m-                ticker, ultimoPrecio, ultimaSma20, ultimaSma50, ultimaSma200[m
+[31m-        );[m
+[31m-[m
+[31m-        llmRepository.analyzeMarket(prompt, new LlmRepository.LlmCallback() {[m
+[31m-            @Override[m
+[31m-            public void onSuccess(String analysis) {[m
+[31m-                if (getActivity() == null) return;[m
+[31m-                getActivity().runOnUiThread(() -> {[m
+[31m-                    tvLlmAnalysis.setText(analysis);[m
+[31m-                    tvLlmAnalysis.setTextColor(Color.WHITE);[m
+[31m-                });[m
+[31m-            }[m
+[31m-[m
+[31m-            @Override[m
+[31m-            public void onError(String error) {[m
+[31m-                if (getActivity() == null) return;[m
+[31m-                getActivity().runOnUiThread(() -> {[m
+[31m-                    tvLlmAnalysis.setText("Error al generar análisis: " + error);[m
+[31m-                    tvLlmAnalysis.setTextColor(Color.RED);[m
+[31m-                });[m
+[31m-            }[m
+[31m-        });[m
+[32m+[m[32m        // El bloque automático de LLM que había aquí se ha eliminado.[m
+     }[m
+ [m
+     private void configurarEstiloGrafico() {[m
+[36m@@ -273,4 +246,29 @@[m [mpublic class MicroFragment extends Fragment {[m
+         combinedChart.getLegend().setTextColor(Color.WHITE);[m
+         combinedChart.getDescription().setEnabled(false);[m
+     }[m
+[31m-}[m
+[32m+[m
+[32m+[m[32m    // 4. MÉTODOS DE LA INTERFAZ ANALYZABLE[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public String getTabName() {[m
+[32m+[m[32m        return "Microeconomía (Acciones)";[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public String getContextualData() {[m
+[32m+[m[32m        if (currentTicker.isEmpty() || currentPrice == 0) {[m
+[32m+[m[32m            return "Aún no hay datos cargados para analizar.";[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return String.format(Locale.US,[m
+[32m+[m[32m                "Eres un analista cuantitativo riguroso. Analiza la acción %s. " +[m
+[32m+[m[32m                        "Precio de cierre actual: %.2f. " +[m
+[32m+[m[32m                        "Media Móvil 20 días: %.2f. " +[m
+[32m+[m[32m                        "Media Móvil 50 días: %.2f. " +[m
+[32m+[m[32m                        "Media Móvil 200 días: %.2f. " +[m
+[32m+[m[32m                        "Instrucciones: Evalúa la tendencia actual comparando el precio con estas medias. " +[m
+[32m+[m[32m                        "¿Hay soporte o resistencia? ¿Es un régimen alcista o bajista? " +[m
+[32m+[m[32m                        "Sé directo, usa lenguaje que cualquiera pueda entender y limítate a un párrafo conciso. No hagas saludos.",[m
+[32m+[m[32m                currentTicker, currentPrice, currentSma20, currentSma50, currentSma200[m
+[32m+[m[32m        );[m
+[32m+[m[32m    }[m
+[32m+[m[32m}[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/java/com/upv/quanttrack/ui/RiskFragment.java b/app/src/main/java/com/upv/quanttrack/ui/RiskFragment.java[m
+[1mnew file mode 100644[m
+[1mindex 0000000..44e9610[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/java/com/upv/quanttrack/ui/RiskFragment.java[m
+[36m@@ -0,0 +1,469 @@[m
+[32m+[m[32mpackage com.upv.quanttrack.ui;[m
+[32m+[m
+[32m+[m[32mimport android.graphics.Color;[m
+[32m+[m[32mimport android.os.Bundle;[m
+[32m+[m[32mimport android.view.LayoutInflater;[m
+[32m+[m[32mimport android.view.View;[m
+[32m+[m[32mimport android.view.ViewGroup;[m
+[32m+[m[32mimport android.widget.Button;[m
+[32m+[m[32mimport android.widget.EditText;[m
+[32m+[m[32mimport android.widget.TextView;[m
+[32m+[m[32mimport android.widget.Toast;[m
+[32m+[m
+[32m+[m[32mimport androidx.annotation.NonNull;[m
+[32m+[m[32mimport androidx.annotation.Nullable;[m
+[32m+[m[32mimport androidx.fragment.app.Fragment;[m
+[32m+[m
+[32m+[m[32mimport com.github.mikephil.charting.charts.PieChart;[m
+[32m+[m[32mimport com.github.mikephil.charting.data.PieData;[m
+[32m+[m[32mimport com.github.mikephil.charting.data.PieDataSet;[m
+[32m+[m[32mimport com.github.mikephil.charting.data.PieEntry;[m
+[32m+[m[32mimport com.github.mikephil.charting.utils.ColorTemplate;[m
+[32m+[m[32mimport com.upv.quanttrack.R;[m
+[32m+[m[32mimport com.upv.quanttrack.data.DailyData;[m
+[32m+[m[32mimport com.upv.quanttrack.data.MarketRepository;[m
+[32m+[m[32mimport com.upv.quanttrack.domain.math.RiskEngine;[m
+[32m+[m
+[32m+[m[32mimport java.util.ArrayList;[m
+[32m+[m[32mimport java.util.Collections;[m
+[32m+[m[32mimport java.util.HashMap;[m
+[32m+[m[32mimport java.util.HashSet;[m
+[32m+[m[32mimport java.util.List;[m
+[32m+[m[32mimport java.util.Locale;[m
+[32m+[m[32mimport java.util.Map;[m
+[32m+[m[32mimport java.util.Set;[m
+[32m+[m[32mimport java.util.concurrent.ConcurrentHashMap;[m
+[32m+[m[32mimport java.util.concurrent.atomic.AtomicInteger;[m
+[32m+[m
+[32m+[m[32mimport java.util.concurrent.ExecutorService;[m
+[32m+[m[32mimport java.util.concurrent.Executors;[m
+[32m+[m[32mimport com.upv.quanttrack.domain.portfolio.AppDatabase;[m
+[32m+[m[32mimport com.upv.quanttrack.domain.portfolio.PortfolioAsset;[m
+[32m+[m[32mpublic class RiskFragment extends Fragment implements Analyzable {[m
+[32m+[m
+[32m+[m[32m    private EditText etRiskTicker, etRiskShares;[m
+[32m+[m[32m    private Button btnAddAsset, btnClearPortfolio, btnCalculateRisk;[m
+[32m+[m[32m    private TextView tvPortfolioHoldings, tvTotalValue, tvRiskMetrics;[m
+[32m+[m[32m    private PieChart portfolioPieChart;[m
+[32m+[m
+[32m+[m[32m    private final Map<String, Double> portfolio = new HashMap<>();[m
+[32m+[m[32m    private final MarketRepository repository = new MarketRepository();[m
+[32m+[m[32m    private final RiskEngine riskEngine = new RiskEngine();[m
+[32m+[m
+[32m+[m[32m    private double currentNotional = 0.0;[m
+[32m+[m[32m    private double currentVolatility = 0.0;[m
+[32m+[m[32m    private double currentVaR = 0.0;[m
+[32m+[m[32m    private TextView tvExpectedShortfall;[m
+[32m+[m[32m    private double currentCVaR = 0.0;[m
+[32m+[m[32m    private android.widget.GridLayout gridCorrelation;[m
+[32m+[m[32m    private AppDatabase db;[m
+[32m+[m[32m    private final ExecutorService diskExecutor = Executors.newSingleThreadExecutor();[m
+[32m+[m[32m    @Nullable[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {[m
+[32m+[m[32m        View view = inflater.inflate(R.layout.fragment_risk, container, false);[m
+[32m+[m
+[32m+[m[32m        etRiskTicker = view.findViewById(R.id.etRiskTicker);[m
+[32m+[m[32m        etRiskShares = view.findViewById(R.id.etRiskShares);[m
+[32m+[m[32m        btnAddAsset = view.findViewById(R.id.btnAddAsset);[m
+[32m+[m[32m        btnClearPortfolio = view.findViewById(R.id.btnClearPortfolio);[m
+[32m+[m[32m        btnCalculateRisk = view.findViewById(R.id.btnCalculateRisk);[m
+[32m+[m[32m        tvPortfolioHoldings = view.findViewById(R.id.tvPortfolioHoldings);[m
+[32m+[m[32m        tvTotalValue = view.findViewById(R.id.tvTotalValue);[m
+[32m+[m[32m        tvRiskMetrics = view.findViewById(R.id.tvRiskMetrics);[m
+[32m+[m[32m        portfolioPieChart = view.findViewById(R.id.portfolioPieChart);[m
+[32m+[m[32m        tvExpectedShortfall = view.findViewById(R.id.tvExpectedShortfall);[m
+[32m+[m[32m        gridCorrelation = view.findViewById(R.id.gridCorrelation);[m
+[32m+[m[32m        configurarLienzoCircular();[m
+[32m+[m[32m        // 1. Instanciamos la conexión a disco[m
+[32m+[m[32m        db = AppDatabase.getDatabase(getContext());[m
+[32m+[m[32m        // 2. Cargamos el vector de estado guardado[m
+[32m+[m[32m        cargarCarteraDesdeDisco();[m
+[32m+[m[32m        btnAddAsset.setOnClickListener(v -> agregarActivo());[m
+[32m+[m[32m        btnClearPortfolio.setOnClickListener(v -> limpiarCartera());[m
+[32m+[m[32m        btnCalculateRisk.setOnClickListener(v -> evaluarRiesgo());[m
+[32m+[m
+[32m+[m[32m        return view;[m
+[32m+[m[32m    }[m
+[32m+[m[32m    private void cargarCarteraDesdeDisco() {[m
+[32m+[m[32m        diskExecutor.execute(() -> {[m
+[32m+[m[32m            // HILO I/O: Lectura[m
+[32m+[m[32m            List<PortfolioAsset> guardados = db.portfolioDao().getAllAssets();[m
+[32m+[m
+[32m+[m[32m            if (getActivity() != null) {[m
+[32m+[m[32m                getActivity().runOnUiThread(() -> {[m
+[32m+[m[32m                    // HILO MAIN: Inyección en RAM y renderizado[m
+[32m+[m[32m                    for (PortfolioAsset asset : guardados) {[m
+[32m+[m[32m                        portfolio.put(asset.getTicker(), asset.getShares());[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                    actualizarEstadoUI();[m
+[32m+[m[32m                });[m
+[32m+[m[32m            }[m
+[32m+[m[32m        });[m
+[32m+[m[32m    }[m
+[32m+[m[32m    private void agregarActivo() {[m
+[32m+[m[32m        String ticker = etRiskTicker.getText().toString().trim().toUpperCase();[m
+[32m+[m[32m        String sharesStr = etRiskShares.getText().toString().trim();[m
+[32m+[m
+[32m+[m[32m        if (ticker.isEmpty() || sharesStr.isEmpty()) return;[m
+[32m+[m
+[32m+[m[32m        try {[m
+[32m+[m[32m            double shares = Double.parseDouble(sharesStr);[m
+[32m+[m[32m            if (shares <= 0) throw new NumberFormatException();[m
+[32m+[m
+[32m+[m[32m            // 1. Bloqueamos la interfaz visualmente para que el usuario sepa que estamos validando[m
+[32m+[m[32m            btnAddAsset.setEnabled(false);[m
+[32m+[m[32m            btnAddAsset.setText("...");[m
+[32m+[m
+[32m+[m[32m            // 2. Disparamos la validación contra la API[m
+[32m+[m[32m            repository.fetchDailyData(ticker, new MarketRepository.DataCallback() {[m
+[32m+[m[32m                @Override[m
+[32m+[m[32m                public void onSuccess(Map<String, DailyData> data) {[m
+[32m+[m[32m                    if (getActivity() == null) return;[m
+[32m+[m[32m                    getActivity().runOnUiThread(() -> {[m
+[32m+[m[32m                        // El ticker es válido. Lo añadimos a la matriz matemática.[m
+[32m+[m[32m                        portfolio.put(ticker, portfolio.getOrDefault(ticker, 0.0) + shares);[m
+[32m+[m[32m                        double finalShares = portfolio.get(ticker);[m
+[32m+[m[32m                        diskExecutor.execute(() -> db.portfolioDao().insertAsset(new PortfolioAsset(ticker, finalShares)));[m
+[32m+[m[32m                        // Limpiamos los inputs y restauramos el botón[m
+[32m+[m[32m                        etRiskTicker.setText("");[m
+[32m+[m[32m                        etRiskShares.setText("");[m
+[32m+[m[32m                        btnAddAsset.setEnabled(true);[m
+[32m+[m[32m                        btnAddAsset.setText("ADD");[m
+[32m+[m
+[32m+[m[32m                        actualizarEstadoUI();[m
+[32m+[m[32m                        Toast.makeText(getContext(), ticker + " añadido a la cartera", Toast.LENGTH_SHORT).show();[m
+[32m+[m[32m                    });[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                @Override[m
+[32m+[m[32m                public void onError(String error) {[m
+[32m+[m[32m                    if (getActivity() == null) return;[m
+[32m+[m[32m                    getActivity().runOnUiThread(() -> {[m
+[32m+[m[32m                        // El ticker NO existe o falló la red. Restauramos el botón y mostramos el error limpio.[m
+[32m+[m[32m                        btnAddAsset.setEnabled(true);[m
+[32m+[m[32m                        btnAddAsset.setText("ADD");[m
+[32m+[m[32m                        Toast.makeText(getContext(), error, Toast.LENGTH_LONG).show();[m
+[32m+[m[32m                    });[m
+[32m+[m[32m                }[m
+[32m+[m[32m            });[m
+[32m+[m
+[32m+[m[32m        } catch (NumberFormatException e) {[m
+[32m+[m[32m            Toast.makeText(getContext(), "La cantidad debe ser un número válido", Toast.LENGTH_SHORT).show();[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private void limpiarCartera() {[m
+[32m+[m[32m        portfolio.clear();[m
+[32m+[m[32m        currentNotional = 0.0;[m
+[32m+[m[32m        currentVolatility = 0.0;[m
+[32m+[m[32m        currentVaR = 0.0;[m
+[32m+[m[32m        actualizarEstadoUI();[m
+[32m+[m[32m        diskExecutor.execute(() -> db.portfolioDao().clearPortfolio());[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private void actualizarEstadoUI() {[m
+[32m+[m[32m        if (portfolio.isEmpty()) {[m
+[32m+[m[32m            // 1. Limpieza de textos y gráfico[m
+[32m+[m[32m            tvPortfolioHoldings.setText("Cartera vacía.");[m
+[32m+[m[32m            portfolioPieChart.clear();[m
+[32m+[m[32m            portfolioPieChart.invalidate();[m
+[32m+[m
+[32m+[m[32m            // 2. Limpieza de métricas[m
+[32m+[m[32m            tvTotalValue.setText("NOTIONAL: $0.00");[m
+[32m+[m[32m            tvRiskMetrics.setText("Volatilidad Anual: --% | VaR Diario (95%): $--");[m
+[32m+[m[32m            tvExpectedShortfall.setText("CVaR (Expected Shortfall): $--");[m
+[32m+[m
+[32m+[m[32m            // 3. Destrucción de la matriz de correlación[m
+[32m+[m[32m            if (gridCorrelation != null) {[m
+[32m+[m[32m                gridCorrelation.removeAllViews();[m
+[32m+[m[32m            }[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Si hay datos, renderizamos el vector de estado en texto[m
+[32m+[m[32m        StringBuilder holdingsText = new StringBuilder("Vector de estado: ");[m
+[32m+[m[32m        for (Map.Entry<String, Double> entry : portfolio.entrySet()) {[m
+[32m+[m[32m            holdingsText.append("[").append(entry.getKey()).append(": ").append(entry.getValue()).append("] ");[m
+[32m+[m[32m        }[m
+[32m+[m[32m        tvPortfolioHoldings.setText(holdingsText.toString());[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    // --- EL CEREBRO DE LA OPERACIÓN ---[m
+[32m+[m[32m    private void evaluarRiesgo() {[m
+[32m+[m[32m        if (portfolio.size() < 2) {[m
+[32m+[m[32m            Toast.makeText(getContext(), "Necesitas al menos 2 activos para la matriz de covarianza", Toast.LENGTH_LONG).show();[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        tvRiskMetrics.setText("Descargando tensores financieros...");[m
+[32m+[m[32m        tvRiskMetrics.setTextColor(Color.YELLOW);[m
+[32m+[m
+[32m+[m[32m        // Mapa concurrente porque recibiremos callbacks desde distintos hilos de red[m
+[32m+[m[32m        Map<String, Map<String, DailyData>> allMarketData = new ConcurrentHashMap<>();[m
+[32m+[m[32m        int expectedCallbacks = portfolio.size();[m
+[32m+[m[32m        AtomicInteger completedCallbacks = new AtomicInteger(0);[m
+[32m+[m
+[32m+[m[32m        for (String ticker : portfolio.keySet()) {[m
+[32m+[m[32m            repository.fetchDailyData(ticker, new MarketRepository.DataCallback() {[m
+[32m+[m[32m                @Override[m
+[32m+[m[32m                public void onSuccess(Map<String, DailyData> data) {[m
+[32m+[m[32m                    allMarketData.put(ticker, data);[m
+[32m+[m[32m                    checkBarrier(completedCallbacks.incrementAndGet(), expectedCallbacks, allMarketData);[m
+[32m+[m[32m                }[m
+[32m+[m
+[32m+[m[32m                @Override[m
+[32m+[m[32m                public void onError(String error) {[m
+[32m+[m[32m                    // 1. Eliminamos de RAM[m
+[32m+[m[32m                    portfolio.remove(ticker);[m
+[32m+[m
+[32m+[m[32m                    // 2. Eliminamos de Disco (por si el ticker dejó de cotizar)[m
+[32m+[m[32m                    diskExecutor.execute(() -> db.portfolioDao().deleteAsset(ticker));[m
+[32m+[m
+[32m+[m[32m                    completedCallbacks.incrementAndGet();[m
+[32m+[m[32m                    if (getActivity() != null) {[m
+[32m+[m[32m                        getActivity().runOnUiThread(() -> {[m
+[32m+[m[32m                            Toast.makeText(getContext(), "Ticker descartado: " + ticker + " (" + error + ")", Toast.LENGTH_LONG).show();[m
+[32m+[m[32m                            // 2. Actualizamos la interfaz para que el usuario vea que ha desaparecido[m
+[32m+[m[32m                            actualizarEstadoUI();[m
+[32m+[m[32m                        });[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                    checkBarrier(completedCallbacks.get(), expectedCallbacks, allMarketData);[m
+[32m+[m[32m                }[m
+[32m+[m[32m            });[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private void checkBarrier(int completed, int expected, Map<String, Map<String, DailyData>> allMarketData) {[m
+[32m+[m[32m        if (completed == expected) {[m
+[32m+[m[32m            if (getActivity() != null) {[m
+[32m+[m[32m                getActivity().runOnUiThread(() -> procesarAlgebraLineal(allMarketData));[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private void procesarAlgebraLineal(Map<String, Map<String, DailyData>> allMarketData) {[m
+[32m+[m[32m        if (allMarketData.size() < 2) {[m
+[32m+[m[32m            tvRiskMetrics.setText("Error crítico de datos. Imposible calcular covarianza.");[m
+[32m+[m[32m            tvRiskMetrics.setTextColor(Color.RED);[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // 1. Intersección de Conjuntos (Alineamiento de fechas)[m
+[32m+[m[32m        Set<String> commonDates = null;[m
+[32m+[m[32m        for (Map<String, DailyData> dataMap : allMarketData.values()) {[m
+[32m+[m[32m            if (commonDates == null) {[m
+[32m+[m[32m                commonDates = new HashSet<>(dataMap.keySet());[m
+[32m+[m[32m            } else {[m
+[32m+[m[32m                commonDates.retainAll(dataMap.keySet());[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (commonDates == null || commonDates.size() < 2) {[m
+[32m+[m[32m            tvRiskMetrics.setText("No hay solapamiento temporal suficiente.");[m
+[32m+[m[32m            tvRiskMetrics.setTextColor(Color.RED);[m
+[32m+[m[32m            return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        List<String> sortedDates = new ArrayList<>(commonDates);[m
+[32m+[m[32m        Collections.sort(sortedDates);[m
+[32m+[m
+[32m+[m[32m        int nDays = sortedDates.size();[m
+[32m+[m[32m        int mAssets = allMarketData.size();[m
+[32m+[m[32m        List<String> assetList = new ArrayList<>(allMarketData.keySet());[m
+[32m+[m
+[32m+[m[32m        // 2. Cálculo de Pesos y Notional[m
+[32m+[m[32m        double totalNotional = 0.0;[m
+[32m+[m[32m        double[] pricesToday = new double[mAssets];[m
+[32m+[m[32m        String lastDate = sortedDates.get(nDays - 1);[m
+[32m+[m
+[32m+[m[32m        for (int j = 0; j < mAssets; j++) {[m
+[32m+[m[32m            String ticker = assetList.get(j);[m
+[32m+[m[32m            double shares = portfolio.get(ticker);[m
+[32m+[m[32m            double price = allMarketData.get(ticker).get(lastDate).getClose();[m
+[32m+[m[32m            pricesToday[j] = price;[m
+[32m+[m[32m            totalNotional += price * shares;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        double[] weights = new double[mAssets];[m
+[32m+[m[32m        for (int j = 0; j < mAssets; j++) {[m
+[32m+[m[32m            String ticker = assetList.get(j);[m
+[32m+[m[32m            weights[j] = (pricesToday[j] * portfolio.get(ticker)) / totalNotional;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // 3. Matriz de Retornos Logarítmicos[m
+[32m+[m[32m        double[][] returnsMatrix = new double[nDays - 1][mAssets];[m
+[32m+[m[32m        for (int j = 0; j < mAssets; j++) {[m
+[32m+[m[32m            String ticker = assetList.get(j);[m
+[32m+[m[32m            Map<String, DailyData> assetData = allMarketData.get(ticker);[m
+[32m+[m[32m            for (int i = 1; i < nDays; i++) {[m
+[32m+[m[32m                double p_t = assetData.get(sortedDates.get(i)).getClose();[m
+[32m+[m[32m                double p_t_minus_1 = assetData.get(sortedDates.get(i - 1)).getClose();[m
+[32m+[m[32m                returnsMatrix[i - 1][j] = Math.log(p_t / p_t_minus_1);[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // 4. Inyección al Motor de Riesgo[m
+[32m+[m[32m        RiskEngine.RiskResult result = riskEngine.calculatePortfolioRisk(returnsMatrix, weights, totalNotional);[m
+[32m+[m
+[32m+[m[32m        currentNotional = totalNotional;[m
+[32m+[m[32m        currentVolatility = result.annualizedVolatility * 100;[m
+[32m+[m[32m        currentVaR = result.var95;[m
+[32m+[m[32m        currentCVaR = result.cVar95;[m
+[32m+[m
+[32m+[m[32m        // 5. Renderizado del HUD (Escalares)[m
+[32m+[m[32m        tvTotalValue.setText(String.format(Locale.US, "NOTIONAL: $%.2f", currentNotional));[m
+[32m+[m[32m        tvRiskMetrics.setText(String.format(Locale.US, "Volatilidad Anual: %.2f%% | VaR (95%%): $%.2f", currentVolatility, currentVaR));[m
+[32m+[m[32m        tvRiskMetrics.setTextColor(Color.parseColor("#FFaa00"));[m
+[32m+[m[32m        tvExpectedShortfall.setText(String.format(Locale.US, "CVaR (Expected Shortfall): $%.2f", currentCVaR));[m
+[32m+[m
+[32m+[m[32m        // 6. Actualizamos el gráfico circular (Topología 1D de pesos)[m
+[32m+[m[32m        List<PieEntry> pieEntries = new ArrayList<>();[m
+[32m+[m[32m        for (int j = 0; j < mAssets; j++) {[m
+[32m+[m[32m            pieEntries.add(new PieEntry((float) (weights[j] * 100), assetList.get(j)));[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        PieDataSet dataSet = new PieDataSet(pieEntries, "");[m
+[32m+[m
+[32m+[m[32m        // Concatenamos múltiples paletas para evitar repeticiones en carteras grandes[m
+[32m+[m[32m        ArrayList<Integer> coloresGrafico = new ArrayList<>();[m
+[32m+[m[32m        for (int c : ColorTemplate.MATERIAL_COLORS) coloresGrafico.add(c);[m
+[32m+[m[32m        for (int c : ColorTemplate.VORDIPLOM_COLORS) coloresGrafico.add(c);[m
+[32m+[m[32m        for (int c : ColorTemplate.JOYFUL_COLORS) coloresGrafico.add(c);[m
+[32m+[m[32m        for (int c : ColorTemplate.LIBERTY_COLORS) coloresGrafico.add(c);[m
+[32m+[m[32m        for (int c : ColorTemplate.PASTEL_COLORS) coloresGrafico.add(c);[m
+[32m+[m[32m        coloresGrafico.add(ColorTemplate.getHoloBlue());[m
+[32m+[m
+[32m+[m[32m        dataSet.setColors(coloresGrafico); // Inyectamos la super-paleta[m
+[32m+[m[32m        dataSet.setValueTextColor(Color.WHITE);[m
+[32m+[m[32m        dataSet.setValueTextSize(14f);[m
+[32m+[m[32m        dataSet.setSliceSpace(2f);[m
+[32m+[m
+[32m+[m[32m        portfolioPieChart.setData(new PieData(dataSet));[m
+[32m+[m[32m        portfolioPieChart.setCenterText("CAPITAL\n$" + String.format(Locale.US, "%.0f", totalNotional));[m
+[32m+[m[32m        portfolioPieChart.notifyDataSetChanged();[m
+[32m+[m[32m        portfolioPieChart.invalidate();[m
+[32m+[m
+[32m+[m[32m        // 7. Renderizado del Heatmap (Topología NxN de correlación)[m
+[32m+[m[32m        renderizarHeatmapCorrelacion(result.correlationMatrix, assetList);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private void configurarLienzoCircular() {[m
+[32m+[m[32m        portfolioPieChart.setBackgroundColor(Color.BLACK);[m
+[32m+[m[32m        portfolioPieChart.getDescription().setEnabled(false);[m
+[32m+[m[32m        portfolioPieChart.getLegend().setTextColor(Color.WHITE);[m
+[32m+[m[32m        portfolioPieChart.setDrawHoleEnabled(true);[m
+[32m+[m[32m        portfolioPieChart.setHoleColor(Color.BLACK);[m
+[32m+[m[32m        portfolioPieChart.setTransparentCircleRadius(55f);[m
+[32m+[m[32m        portfolioPieChart.setCenterText("PESOS (w)");[m
+[32m+[m[32m        portfolioPieChart.setCenterTextColor(Color.WHITE);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public String getTabName() {[m
+[32m+[m[32m        return "Gestión de Riesgos (VaR y Markowitz)";[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    @Override[m
+[32m+[m[32m    public String getContextualData() {[m
+[32m+[m[32m        if (portfolio.isEmpty() || currentNotional == 0) {[m
+[32m+[m[32m            return "La cartera no ha sido analizada o está vacía.";[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        StringBuilder composition = new StringBuilder();[m
+[32m+[m[32m        for (Map.Entry<String, Double> entry : portfolio.entrySet()) {[m
+[32m+[m[32m            composition.append(entry.getKey()).append(" (").append(entry.getValue()).append(" uds), ");[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return String.format(Locale.US,[m
+[32m+[m[32m                "Eres un gestor de riesgos cuantitativo. Analiza esta cartera: %s. " +[m
+[32m+[m[32m                        "Notional Total: $%.2f. Volatilidad Anualizada: %.2f%%. VaR Diario (95%%): $%.2f. CVaR (Expected Shortfall): $%.2f. " +[m
+[32m+[m[32m                        "Instrucciones: Evalúa el riesgo de concentración y el riesgo de cola (diferencia entre VaR y CVaR). " +[m
+[32m+[m[32m                        "Sugiere activos ortogonales para optimizar la frontera de Markowitz. " +[m
+[32m+[m[32m                        "Sé directo, riguroso, usa jerga entendible y limítate a un párrafo conciso.",[m
+[32m+[m[32m                composition.toString(), currentNotional, currentVolatility, currentVaR, currentCVaR[m
+[32m+[m[32m        );[m
+[32m+[m[32m    } // <-- Aquí cerramos correctamente getContextualData()[m
+[32m+[m
+[32m+[m[32m    // --- MÉTODOS DE RENDERIZADO DEL HEATMAP DE CORRELACIÓN ---[m
+[32m+[m
+[32m+[m[32m    private void renderizarHeatmapCorrelacion(double[][] matrix, List<String> assets) {[m
+[32m+[m[32m        gridCorrelation.removeAllViews();[m
+[32m+[m[32m        int n = assets.size();[m
+[32m+[m
+[32m+[m[32m        // Dimensiones: N+1 porque la primera fila y columna son las etiquetas (Tickers)[m
+[32m+[m[32m        gridCorrelation.setRowCount(n + 1);[m
+[32m+[m[32m        gridCorrelation.setColumnCount(n + 1);[m
+[32m+[m
+[32m+[m[32m        // Esquina superior izquierda (vacía)[m
+[32m+[m[32m        gridCorrelation.addView(crearCeldaHeatmap("", Color.TRANSPARENT, true));[m
+[32m+[m
+[32m+[m[32m        // Cabeceras de columnas (Tickers en el eje X)[m
+[32m+[m[32m        for (String asset : assets) {[m
+[32m+[m[32m            gridCorrelation.addView(crearCeldaHeatmap(asset, Color.parseColor("#333333"), true));[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Bucle para pintar filas y datos[m
+[32m+[m[32m        for (int i = 0; i < n; i++) {[m
+[32m+[m[32m            // Cabecera de fila (Ticker en el eje Y)[m
+[32m+[m[32m            gridCorrelation.addView(crearCeldaHeatmap(assets.get(i), Color.parseColor("#333333"), true));[m
+[32m+[m
+[32m+[m[32m            // Valores de la matriz rho_ij[m
+[32m+[m[32m            for (int j = 0; j < n; j++) {[m
+[32m+[m[32m                double val = matrix[i][j];[m
+[32m+[m[32m                int bgColor = calcularColorCorrelacion(val);[m
+[32m+[m[32m                String text = String.format(Locale.US, "%.2f", val);[m
+[32m+[m
+[32m+[m[32m                // Si es la diagonal principal (rho = 1), podemos ponerle un marcador visual o dejarlo normal[m
+[32m+[m[32m                gridCorrelation.addView(crearCeldaHeatmap(text, bgColor, false));[m
+[32m+[m[32m            }[m
+[32m+[m[32m        }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private int calcularColorCorrelacion(double rho) {[m
+[32m+[m[32m        // Interpola el color basado en la intensidad de rho en [-1, 1][m
+[32m+[m[32m        int alpha = 255;[m
+[32m+[m[32m        int r = 0, g = 0, b = 0;[m
+[32m+[m
+[32m+[m[32m        if (rho > 0) {[m
+[32m+[m[32m            // Correlación positiva: de Negro (0) a Verde (255)[m
+[32m+[m[32m            g = (int) (rho * 200); // 200 en lugar de 255 para que no sea un verde cegador[m
+[32m+[m[32m        } else if (rho < 0) {[m
+[32m+[m[32m            // Correlación negativa: de Negro (0) a Rojo (255)[m
+[32m+[m[32m            r = (int) (Math.abs(rho) * 200);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        return Color.argb(alpha, r, g, b);[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    private TextView crearCeldaHeatmap(String texto, int bgColor, boolean isHeader) {[m
+[32m+[m[32m        TextView tv = new TextView(getContext());[m
+[32m+[m[32m        tv.setText(texto);[m
+[32m+[m[32m        tv.setTextColor(Color.WHITE);[m
+[32m+[m[32m        tv.setBackgroundColor(bgColor);[m
+[32m+[m
+[32m+[m[32m        // El texto debe estar perfectamente centrado en los dos ejes[m
+[32m+[m[32m        tv.setGravity(android.view.Gravity.CENTER);[m
+[32m+[m
+[32m+[m[32m        // Ajustamos un poco el tamaño de fuente para que quepa bien en el cuadrado[m
+[32m+[m[32m        tv.setTextSize(isHeader ? 11f : 13f);[m
+[32m+[m
+[32m+[m[32m        if (isHeader) {[m
+[32m+[m[32m            tv.setTypeface(null, android.graphics.Typeface.BOLD);[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // --- LA MAGIA DE LA GEOMETRÍA FIJA ---[m
+[32m+[m[32m        // Forzamos cuadrados exactos de 50x50 dp (independientemente del texto)[m
+[32m+[m[32m        float factorDensidad = getResources().getDisplayMetrics().density;[m
+[32m+[m[32m        int tamanoCeldaPx = (int) (50 * factorDensidad);[m
+[32m+[m
+[32m+[m[32m        android.widget.GridLayout.LayoutParams params = new android.widget.GridLayout.LayoutParams();[m
+[32m+[m[32m        params.width = tamanoCeldaPx;  // Ancho rígido[m
+[32m+[m[32m        params.height = tamanoCeldaPx; // Alto rígido[m
+[32m+[m[32m        params.setMargins(2, 2, 2, 2); // Simula el borde de 2px[m
+[32m+[m
+[32m+[m[32m        tv.setLayoutParams(params);[m
+[32m+[m
+[32m+[m[32m        return tv;[m
+[32m+[m[32m    }[m
+[32m+[m[32m} // <-- Cierre final de la clase RiskFragment[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/res/layout/activity_main.xml b/app/src/main/res/layout/activity_main.xml[m
+[1mindex affa6a6..54e51f9 100644[m
+[1m--- a/app/src/main/res/layout/activity_main.xml[m
+[1m+++ b/app/src/main/res/layout/activity_main.xml[m
+[36m@@ -5,13 +5,14 @@[m [mandroid:layout_width="match_parent"[m
+ android:layout_height="match_parent"[m
+ android:background="#000000">[m
+ [m
+[31m-<androidx.fragment.app.FragmentContainerView[m
+[31m-    android:id="@+id/fragment_container"[m
+[31m-    android:layout_width="match_parent"[m
+[31m-    android:layout_height="match_parent"[m
+[31m-    android:layout_above="@id/bottom_navigation" />[m
+[32m+[m[32m    <androidx.fragment.app.FragmentContainerView[m
+[32m+[m[32m        android:id="@+id/fragment_container"[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="match_parent"[m
+[32m+[m[32m        android:layout_above="@id/bottom_navigation"[m
+[32m+[m[32m        android:layout_marginBottom="0dp" />[m
+ [m
+[31m-<com.google.android.material.bottomnavigation.BottomNavigationView[m
+[32m+[m[32m    <com.google.android.material.bottomnavigation.BottomNavigationView[m
+     android:id="@+id/bottom_navigation"[m
+     android:layout_width="match_parent"[m
+     android:layout_height="wrap_content"[m
+[36m@@ -21,4 +22,18 @@[m [mandroid:background="#000000">[m
+     app:itemTextColor="@color/white"[m
+     app:menu="@menu/bottom_nav_menu" />[m
+ [m
+[32m+[m[32m    <com.google.android.material.floatingactionbutton.FloatingActionButton[m
+[32m+[m[32m        android:id="@+id/fabGemini"[m
+[32m+[m[32m        android:layout_width="wrap_content"[m
+[32m+[m[32m        android:layout_height="wrap_content"[m
+[32m+[m[32m        android:layout_above="@id/bottom_navigation"[m
+[32m+[m[32m        android:layout_alignParentEnd="true"[m
+[32m+[m[32m        android:layout_margin="16dp"[m
+[32m+[m[32m        android:layout_marginStart="16dp"[m
+[32m+[m[32m        android:layout_marginTop="16dp"[m
+[32m+[m[32m        android:layout_marginEnd="31dp"[m
+[32m+[m[32m        android:layout_marginBottom="291dp"[m
+[32m+[m[32m        android:src="@android:drawable/ic_menu_help"[m
+[32m+[m[32m        app:backgroundTint="#6200EE"[m
+[32m+[m[32m        app:tint="#FFFFFF" />[m
+ </RelativeLayout>[m
+\ No newline at end of file[m
+[1mdiff --git a/app/src/main/res/layout/fragment_micro.xml b/app/src/main/res/layout/fragment_micro.xml[m
+[1mindex 6743341..f102ec4 100644[m
+[1m--- a/app/src/main/res/layout/fragment_micro.xml[m
+[1m+++ b/app/src/main/res/layout/fragment_micro.xml[m
+[36m@@ -46,19 +46,5 @@[m
+         android:layout_height="0dp"[m
+         android:layout_weight="1" />[m
+ [m
+[31m-    <ScrollView[m
+[31m-        android:layout_width="match_parent"[m
+[31m-        android:layout_height="150dp"[m
+[31m-        android:layout_marginTop="8dp"[m
+[31m-        android:background="#1A1A1A"[m
+[31m-        android:padding="8dp">[m
+ [m
+[31m-        <TextView[m
+[31m-            android:id="@+id/tvLlmAnalysis"[m
+[31m-            android:layout_width="match_parent"[m
+[31m-            android:layout_height="wrap_content"[m
+[31m-            android:textColor="#CCCCCC"[m
+[31m-            android:textSize="14sp"[m
+[31m-            android:text="El análisis cuantitativo aparecerá aquí..." />[m
+[31m-    </ScrollView>[m
+ </LinearLayout>[m
+[1mdiff --git a/app/src/main/res/layout/fragment_risk.xml b/app/src/main/res/layout/fragment_risk.xml[m
+[1mnew file mode 100644[m
+[1mindex 0000000..f4cd7cf[m
+[1m--- /dev/null[m
+[1m+++ b/app/src/main/res/layout/fragment_risk.xml[m
+[36m@@ -0,0 +1,152 @@[m
+[32m+[m[32m<?xml version="1.0" encoding="utf-8"?>[m
+[32m+[m[32m<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"[m
+[32m+[m[32m    android:layout_width="match_parent"[m
+[32m+[m[32m    android:layout_height="match_parent"[m
+[32m+[m[32m    android:orientation="vertical"[m
+[32m+[m[32m    android:background="#000000"[m
+[32m+[m[32m    android:padding="8dp">[m
+[32m+[m
+[32m+[m[32m    <LinearLayout[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="wrap_content"[m
+[32m+[m[32m        android:orientation="horizontal"[m
+[32m+[m[32m        android:layout_marginBottom="8dp">[m
+[32m+[m
+[32m+[m[32m        <EditText[m
+[32m+[m[32m            android:id="@+id/etRiskTicker"[m
+[32m+[m[32m            android:layout_width="0dp"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:layout_weight="1.5"[m
+[32m+[m[32m            android:hint="TICKER"[m
+[32m+[m[32m            android:textColor="#FFFFFF"[m
+[32m+[m[32m            android:textColorHint="#888888"[m
+[32m+[m[32m            android:textAllCaps="true"[m
+[32m+[m[32m            android:maxLines="1"[m
+[32m+[m[32m            android:inputType="textCapCharacters" />[m
+[32m+[m
+[32m+[m[32m        <EditText[m
+[32m+[m[32m            android:id="@+id/etRiskShares"[m
+[32m+[m[32m            android:layout_width="0dp"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:layout_weight="1"[m
+[32m+[m[32m            android:hint="CANT."[m
+[32m+[m[32m            android:textColor="#FFFFFF"[m
+[32m+[m[32m            android:textColorHint="#888888"[m
+[32m+[m[32m            android:inputType="numberDecimal"[m
+[32m+[m[32m            android:maxLines="1" />[m
+[32m+[m
+[32m+[m[32m        <Button[m
+[32m+[m[32m            android:id="@+id/btnAddAsset"[m
+[32m+[m[32m            android:layout_width="wrap_content"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:text="ADD"[m
+[32m+[m[32m            android:backgroundTint="#444444"[m
+[32m+[m[32m            android:textColor="#FFFFFF"/>[m
+[32m+[m
+[32m+[m[32m        <Button[m
+[32m+[m[32m            android:id="@+id/btnClearPortfolio"[m
+[32m+[m[32m            android:layout_width="wrap_content"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:text="CLR"[m
+[32m+[m[32m            android:backgroundTint="#8B0000"[m
+[32m+[m[32m            android:textColor="#FFFFFF"[m
+[32m+[m[32m            android:layout_marginStart="4dp"/>[m
+[32m+[m
+[32m+[m[32m        <Button[m
+[32m+[m[32m            android:id="@+id/btnCalculateRisk"[m
+[32m+[m[32m            android:layout_width="wrap_content"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:text="CALC"[m
+[32m+[m[32m            android:backgroundTint="#0066CC"[m
+[32m+[m[32m            android:textColor="#FFFFFF"[m
+[32m+[m[32m            android:layout_marginStart="4dp"/>[m
+[32m+[m[32m    </LinearLayout>[m
+[32m+[m
+[32m+[m[32m    <TextView[m
+[32m+[m[32m        android:id="@+id/tvPortfolioHoldings"[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="wrap_content"[m
+[32m+[m[32m        android:textColor="#AAAAAA"[m
+[32m+[m[32m        android:textSize="12sp"[m
+[32m+[m[32m        android:text="Cartera vacía. Añade activos para inicializar la matriz de covarianza."[m
+[32m+[m[32m        android:paddingBottom="8dp" />[m
+[32m+[m
+[32m+[m[32m    <LinearLayout[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="wrap_content"[m
+[32m+[m[32m        android:orientation="vertical"[m
+[32m+[m[32m        android:background="#111111"[m
+[32m+[m[32m        android:padding="8dp"[m
+[32m+[m[32m        android:layout_marginBottom="8dp">[m
+[32m+[m
+[32m+[m[32m        <TextView[m
+[32m+[m[32m            android:id="@+id/tvTotalValue"[m
+[32m+[m[32m            android:layout_width="match_parent"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:textColor="#00FF00"[m
+[32m+[m[32m            android:textSize="18sp"[m
+[32m+[m[32m            android:textStyle="bold"[m
+[32m+[m[32m            android:gravity="center"[m
+[32m+[m[32m            android:text="NOTIONAL: $0.00" />[m
+[32m+[m
+[32m+[m[32m        <TextView[m
+[32m+[m[32m            android:id="@+id/tvRiskMetrics"[m
+[32m+[m[32m            android:layout_width="match_parent"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:textColor="#FFaa00"[m
+[32m+[m[32m            android:textSize="14sp"[m
+[32m+[m[32m            android:gravity="center"[m
+[32m+[m[32m            android:paddingTop="4dp"[m
+[32m+[m[32m            android:text="Volatilidad Anual: --% | VaR Diario (95%): $--" />[m
+[32m+[m
+[32m+[m[32m        <TextView[m
+[32m+[m[32m            android:id="@+id/tvExpectedShortfall"[m
+[32m+[m[32m            android:layout_width="match_parent"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:textColor="#FF4444"[m
+[32m+[m[32m            android:textSize="14sp"[m
+[32m+[m[32m            android:gravity="center"[m
+[32m+[m[32m            android:paddingTop="2dp"[m
+[32m+[m[32m            android:text="CVaR (Expected Shortfall): $--" />[m
+[32m+[m[32m    </LinearLayout>[m
+[32m+[m
+[32m+[m[32m    <TextView[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="wrap_content"[m
+[32m+[m[32m        android:text="MATRIZ DE CORRELACIÓN (ρ)"[m
+[32m+[m[32m        android:textColor="#FFFFFF"[m
+[32m+[m[32m        android:textSize="12sp"[m
+[32m+[m[32m        android:textStyle="bold"[m
+[32m+[m[32m        android:gravity="center"[m
+[32m+[m[32m        android:paddingTop="4dp"[m
+[32m+[m[32m        android:paddingBottom="4dp"/>[m
+[32m+[m
+[32m+[m[32m    <ScrollView[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="0dp"[m
+[32m+[m[32m        android:layout_weight="1"[m
+[32m+[m[32m        android:layout_marginBottom="8dp">[m
+[32m+[m
+[32m+[m[32m        <HorizontalScrollView[m
+[32m+[m[32m            android:layout_width="wrap_content"[m
+[32m+[m[32m            android:layout_height="wrap_content"[m
+[32m+[m[32m            android:layout_gravity="center_horizontal"[m
+[32m+[m[32m            android:scrollbars="none">[m
+[32m+[m
+[32m+[m[32m            <GridLayout[m
+[32m+[m[32m                android:id="@+id/gridCorrelation"[m
+[32m+[m[32m                android:layout_width="wrap_content"[m
+[32m+[m[32m                android:layout_height="wrap_content"[m
+[32m+[m[32m                android:layout_gravity="center"[m
+[32m+[m[32m                android:alignmentMode="alignBounds" />[m
+[32m+[m
+[32m+[m[32m        </HorizontalScrollView>[m
+[32m+[m[32m    </ScrollView>[m
+[32m+[m
+[32m+[m[32m    <com.github.mikephil.charting.charts.PieChart[m
+[32m+[m[32m        android:id="@+id/portfolioPieChart"[m
+[32m+[m[32m        android:layout_width="match_parent"[m
+[32m+[m[32m        android:layout_height="0dp"[m
+[32m+[m[32m        android:layout_weight="1" />[m
+[32m+[m
+[32m+[m[32m</LinearLayout>[m
+\ No newline at end of file[m

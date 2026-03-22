@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:layout_marginBottom="8dp"
+    android:background="#1E1E1E">
+
+    <TextView
+        android:id="@+id/tvTermName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#BB86FC"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:text="Término" />
+
+    <TextView
+        android:id="@+id/tvTermDefinition"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="#DDDDDD"
+        android:textSize="14sp"
+        android:lineSpacingExtra="4dp"
+        android:text="Definición matemática y aplicación." />
+</LinearLayout>

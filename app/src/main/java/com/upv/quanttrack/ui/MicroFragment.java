@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+
+
 // 1. IMPLEMENTAMOS LA INTERFAZ
 public class MicroFragment extends Fragment implements Analyzable {
 
@@ -44,6 +46,7 @@ public class MicroFragment extends Fragment implements Analyzable {
     private Button btnSearch;
     private TextView tvCurrentPrice;
     private MarketRepository repository;
+    private com.github.mikephil.charting.charts.LineChart rsiChart;
 
     // NOTA: Hemos eliminado tvLlmAnalysis y llmRepository de aquí.
 
@@ -51,6 +54,7 @@ public class MicroFragment extends Fragment implements Analyzable {
     private String currentTicker = "";
     private double currentPrice = 0;
     private double currentSma20 = 0, currentSma50 = 0, currentSma200 = 0;
+    private double currentRsi = 0;
 
     @Nullable
     @Override
@@ -63,7 +67,8 @@ public class MicroFragment extends Fragment implements Analyzable {
         etTicker = view.findViewById(R.id.etTicker);
         btnSearch = view.findViewById(R.id.btnSearch);
         tvCurrentPrice = view.findViewById(R.id.tvCurrentPrice);
-
+        rsiChart = view.findViewById(R.id.rsiChart);
+        configurarLienzoRSI(); // Nuevo método de diseño
         repository = new MarketRepository();
 
         configurarEstiloGrafico();
@@ -124,8 +129,12 @@ public class MicroFragment extends Fragment implements Analyzable {
         List<CandleEntry> candleEntries = new ArrayList<>();
         double[] closePrices = new double[n];
 
+        List<DailyData> assetDailyData = new ArrayList<>(); // <-- NUEVO: Lista para el motor RSI
+
         for (int i = 0; i < n; i++) {
             DailyData d = data.get(fechas.get(i));
+            assetDailyData.add(d); // <-- NUEVO: Guardamos el objeto completo
+
             closePrices[i] = d.getClose();
             candleEntries.add(new CandleEntry(i, (float)d.getHigh(), (float)d.getLow(), (float)d.getOpen(), (float)d.getClose()));
         }
@@ -233,6 +242,32 @@ public class MicroFragment extends Fragment implements Analyzable {
         combinedChart.invalidate();
 
         // El bloque automático de LLM que había aquí se ha eliminado.
+        List<Double> rsiValues = com.upv.quanttrack.domain.math.OscillatorEngine.calculateRSI(assetDailyData, 14);
+        List<Entry> rsiEntries = new ArrayList<>();
+
+        for (int i = 0; i < n; i++) {
+            double rsiVal = rsiValues.get(i);
+            if (rsiVal > 0) { // Omitimos los primeros 14 días nulos de carga
+                rsiEntries.add(new Entry(i, (float) rsiVal));
+            }
+        }
+
+        // Guardamos el último RSI para el prompt de la IA
+        currentRsi = rsiValues.isEmpty() ? 0 : rsiValues.get(rsiValues.size() - 1);
+
+        LineDataSet rsiDataSet = new LineDataSet(rsiEntries, "RSI (14)");
+        rsiDataSet.setColor(Color.parseColor("#BB86FC")); // Morado técnico
+        rsiDataSet.setLineWidth(1.5f);
+        rsiDataSet.setDrawCircles(false);
+        rsiDataSet.setDrawValues(false);
+
+        LineData rsiData = new LineData(rsiDataSet);
+        rsiChart.setData(rsiData);
+
+        // Sincronizamos el zoom y el paneo para que coincida exactamente con las velas de arriba
+        rsiChart.setVisibleXRangeMaximum(150);
+        rsiChart.moveViewToX(n);
+        rsiChart.invalidate();
     }
 
     private void configurarEstiloGrafico() {
@@ -262,13 +297,73 @@ public class MicroFragment extends Fragment implements Analyzable {
         return String.format(Locale.US,
                 "Eres un analista cuantitativo riguroso. Analiza la acción %s. " +
                         "Precio de cierre actual: %.2f. " +
+                        "RSI (14 días): %.2f. " +
                         "Media Móvil 20 días: %.2f. " +
                         "Media Móvil 50 días: %.2f. " +
                         "Media Móvil 200 días: %.2f. " +
                         "Instrucciones: Evalúa la tendencia actual comparando el precio con estas medias. " +
-                        "¿Hay soporte o resistencia? ¿Es un régimen alcista o bajista? " +
-                        "Sé directo, usa lenguaje que cualquiera pueda entender y limítate a un párrafo conciso. No hagas saludos.",
-                currentTicker, currentPrice, currentSma20, currentSma50, currentSma200
+                        "¿Hay soporte o resistencia? Luego, usa el RSI para determinar si el movimiento está sobrecomprado (>70) o sobrevendido (<30) y si tiene fuerza real. " +
+                        "Sé directo, usa lenguaje que cualquiera pueda entender y limítate a un párrafo conciso estructurado. No hagas saludos.",
+                currentTicker, currentPrice, currentRsi, currentSma20, currentSma50, currentSma200
         );
+    }
+    private void configurarLienzoRSI() {
+        rsiChart.setBackgroundColor(android.graphics.Color.BLACK);
+
+        // 1. Identificación del Indicador (Ahora sí será visible)
+        com.github.mikephil.charting.components.Description desc = new com.github.mikephil.charting.components.Description();
+        desc.setText("RELATIVE STRENGTH INDEX (14)");
+        desc.setTextColor(android.graphics.Color.GRAY);
+        desc.setTextSize(9f);
+        // Lo posicionamos un poco desplazado del borde
+        desc.setXOffset(10f);
+        desc.setYOffset(10f);
+        rsiChart.setDescription(desc);
+        rsiChart.getDescription().setEnabled(true);
+
+        rsiChart.getLegend().setEnabled(false);
+
+        // 2. Eje X: Invisible pero sincronizado
+        com.github.mikephil.charting.components.XAxis xAxis = rsiChart.getXAxis();
+        xAxis.setEnabled(false);
+        xAxis.setAxisMinimum(0f); // Evita que el gráfico "baile" respecto al de arriba
+
+        // 3. Eje Y: Limpieza y niveles de referencia
+        com.github.mikephil.charting.components.YAxis leftAxis = rsiChart.getAxisLeft();
+        leftAxis.setTextColor(android.graphics.Color.LTGRAY);
+        leftAxis.setAxisMaximum(100f);
+        leftAxis.setAxisMinimum(0f);
+        leftAxis.setDrawGridLines(false);
+
+        // Solo mostramos 3 etiquetas: 0, 50 y 100 para no ensuciar la vista
+        leftAxis.setLabelCount(3, true);
+
+        // 4. Líneas de Límite (Sobrecompra / Sobreventa)
+        // Limpiamos líneas previas para evitar duplicados en cada búsqueda
+        leftAxis.removeAllLimitLines();
+
+        com.github.mikephil.charting.components.LimitLine upperLine = new com.github.mikephil.charting.components.LimitLine(70f, "70 - OB");
+        upperLine.setLineColor(android.graphics.Color.RED);
+        upperLine.setLineWidth(0.8f);
+        upperLine.enableDashedLine(10f, 10f, 0f);
+        upperLine.setTextColor(android.graphics.Color.RED);
+        upperLine.setTextSize(7f);
+        leftAxis.addLimitLine(upperLine);
+
+        com.github.mikephil.charting.components.LimitLine lowerLine = new com.github.mikephil.charting.components.LimitLine(30f, "30 - OS");
+        lowerLine.setLineColor(android.graphics.Color.GREEN);
+        lowerLine.setLineWidth(0.8f);
+        lowerLine.enableDashedLine(10f, 10f, 0f);
+        lowerLine.setTextColor(android.graphics.Color.GREEN);
+        lowerLine.setTextSize(7f);
+        leftAxis.addLimitLine(lowerLine);
+
+        // Añadimos una línea neutra en 50 (opcional, ayuda visualmente)
+        com.github.mikephil.charting.components.LimitLine midLine = new com.github.mikephil.charting.components.LimitLine(50f, "");
+        midLine.setLineColor(android.graphics.Color.DKGRAY);
+        midLine.setLineWidth(0.5f);
+        leftAxis.addLimitLine(midLine);
+
+        rsiChart.getAxisRight().setEnabled(false);
     }
 }

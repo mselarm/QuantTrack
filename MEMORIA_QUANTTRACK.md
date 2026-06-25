@@ -362,15 +362,15 @@ La pestaña `Micro` usa sobre todo la serie de cierres \( \{C_t\} \), aunque con
 
 La clase `SimpleMovingAverage` implementa una media móvil simple de periodo \( n \):
 
-\[
+$$
 \operatorname{SMA}_t^{(n)} = \frac{1}{n}\sum_{k=0}^{n-1} C_{t-k}
-\]
+$$
 
 En la app se usan tres periodos:
 
-1. \( n = 20 \)
-2. \( n = 50 \)
-3. \( n = 200 \)
+1. $n = 20$
+2. $n = 50$
+3. $n = 200$
 
 Estas tres medias responden a horizontes distintos:
 
@@ -382,69 +382,69 @@ Estas tres medias responden a horizontes distintos:
 
 El algoritmo no recalcula la suma completa para cada ventana. Usa una ventana deslizante:
 
-\[
+$$
 S_t = S_{t-1} + C_t - C_{t-n}
-\]
+$$
 
 y entonces:
 
-\[
+$$
 \operatorname{SMA}_t^{(n)} = \frac{S_t}{n}
-\]
+$$
 
-Eso reduce la complejidad a \( O(N) \), que es lo correcto para series largas.
+Eso reduce la complejidad a $O(N)$, que es lo correcto para series largas.
 
 ### RSI con suavizado de Wilder
 
-El RSI se calcula en `OscillatorEngine` con periodo \( n = 14 \). La idea es medir la fuerza relativa entre cierres alcistas y bajistas.
+El RSI se calcula en `OscillatorEngine` con periodo $n = 14$. La idea es medir la fuerza relativa entre cierres alcistas y bajistas.
 
 Primero se define el cambio diario:
 
-\[
+$$
 \Delta_t = C_t - C_{t-1}
-\]
+$$
 
 Después se separan ganancias y pérdidas:
 
-\[
+$$
 G_t = \max(\Delta_t, 0)
-\]
+$$
 
-\[
+$$
 L_t = \max(-\Delta_t, 0)
-\]
+$$
 
 La media inicial se calcula de forma simple:
 
-\[
+$$
 \overline{G}_{n} = \frac{1}{n}\sum_{t=1}^{n} G_t
 \qquad
 \overline{L}_{n} = \frac{1}{n}\sum_{t=1}^{n} L_t
-\]
+$$
 
 Para el resto de sesiones, el código aplica el suavizado de Wilder:
 
-\[
+$$
 \overline{G}_{t} = \frac{(n-1)\overline{G}_{t-1} + G_t}{n}
-\]
+$$
 
-\[
+$$
 \overline{L}_{t} = \frac{(n-1)\overline{L}_{t-1} + L_t}{n}
-\]
+$$
 
 Con eso se construye la fuerza relativa:
 
-\[
+$$
 RS_t = \frac{\overline{G}_t}{\overline{L}_t}
-\]
+$$
 
 y finalmente:
 
-\[
+$$
 RSI_t = 100 - \frac{100}{1 + RS_t}
-\]
+$$
 
-Si \( \overline{L}_t = 0 \), el código devuelve \( 100 \), que representa una secuencia sin pérdidas en esa fase del cálculo.
+Si $\overline{L}_t = 0$, el código devuelve \( 100 \), que representa una secuencia sin pérdidas en esa fase del cálculo.
 
 ### Cómo lo implementa `MicroFragment`
 
@@ -576,18 +576,18 @@ Cada fila se convierte en un `YieldCurveData`, con once vencimientos seleccionad
 
 Para cada fecha \( t \), la curva se representa como un vector:
 
-\[
+$$
 y_t =
 \begin{bmatrix}
 y_{1M,t} & y_{3M,t} & y_{6M,t} & y_{1Y,t} & y_{2Y,t} & y_{3Y,t} & y_{5Y,t} & y_{7Y,t} & y_{10Y,t} & y_{20Y,t} & y_{30Y,t}
 \end{bmatrix}^{\top}
-\]
+$$
 
 La app utiliza una matriz histórica:
 
-\[
+$$
 Y \in \mathbb{R}^{N \times 11}
-\]
+$$
 
 donde:
 
@@ -599,15 +599,15 @@ donde:
 
 La métrica inmediata que muestra la pestaña es:
 
-\[
+$$
 \text{Spread}_{10Y-2Y}(t) = y_{10Y,t} - y_{2Y,t}
-\]
+$$
 
 Como los rendimientos están expresados en puntos porcentuales, al multiplicar por 100 el resultado se enseña en puntos básicos:
 
-\[
+$$
 1 \text{ punto porcentual} = 100 \text{ bps}
-\]
+$$
 
 Si el spread es negativo, la app lo pinta en rojo. Esa decisión visual está muy bien elegida: reduce el tiempo de lectura.
 
@@ -621,61 +621,61 @@ Eso no es un problema. De hecho, para una app docente es una aproximación razon
 
 Se calcula la media por vencimiento:
 
-\[
+$$
 \bar{y}_j = \frac{1}{N}\sum_{t=1}^{N} y_{t,j}
-\]
+$$
 
 Después se centra la matriz:
 
-\[
+$$
 X_{t,j} = y_{t,j} - \bar{y}_j
-\]
+$$
 
 o, de forma compacta:
 
-\[
+$$
 X = Y - \mathbf{1}\bar{y}^{\top}
-\]
+$$
 
 ### Paso 2: matriz de covarianza
 
 Con los datos centrados se construye la covarianza empírica:
 
-\[
+$$
 \Sigma = \frac{1}{N-1} X^{\top}X
-\]
+$$
 
 Aquí:
 
-1. \( \Sigma \in \mathbb{R}^{11 \times 11} \)
+1. $\Sigma \in \mathbb{R}^{11 \times 11}$
 2. cada entrada mide cómo co-varían dos vencimientos a lo largo del tiempo
 
 ### Paso 3: descomposición espectral
 
 El motor calcula autovalores y autovectores:
 
-\[
+$$
 \Sigma v_k = \lambda_k v_k
-\]
+$$
 
 donde:
 
-1. \( \lambda_k \) es la varianza explicada por el componente \( k \)
-2. \( v_k \) es la dirección principal asociada
+1. $\lambda_k$ es la varianza explicada por el componente $k$
+2. $v_k$ es la dirección principal asociada
 
 ### Paso 4: scores temporales
 
 Los scores temporales se obtienen proyectando cada curva centrada sobre los autovectores:
 
-\[
+$$
 z_{t,k} = X_t^{\top} v_k
-\]
+$$
 
 o matricialmente:
 
-\[
+$$
 Z = XV
-\]
+$$
 
 La app usa sobre todo los tres primeros componentes, porque son los que suelen concentrar la gran mayoría de la varianza.
 
@@ -683,9 +683,9 @@ La app usa sobre todo los tres primeros componentes, porque son los que suelen c
 
 Cada porcentaje de varianza explicada se calcula como:
 
-\[
+$$
 \text{VarExp}_k = 100 \cdot \frac{\lambda_k}{\sum_{j=1}^{11}\lambda_j}
-\]
+$$
 
 La lectura económica típica es:
 
@@ -843,11 +843,11 @@ Es una buena decisión. Evita contaminar la base de datos con tickers erróneos.
 
 ### Construcción del notional
 
-Supongamos una cartera con \( m \) activos. Si \( q_i \) es el número de acciones del activo \( i \) y \( P_i \) es su precio actual, el notional total es:
+Supongamos una cartera con  $m$  activos. Si $q_i$ es el número de acciones del activo $i$ y $P_i$ es su precio actual, el notional total es:
 
-\[
+$$
 N = \sum_{i=1}^{m} q_i P_i
-\]
+$$
 
 Ese escalar es el tamaño monetario actual de la cartera.
 
@@ -855,15 +855,15 @@ Ese escalar es el tamaño monetario actual de la cartera.
 
 Los pesos se calculan como participación de mercado actual:
 
-\[
+$$
 w_i = \frac{q_i P_i}{N}
-\]
+$$
 
 Por construcción:
 
-\[
+$$
 \sum_{i=1}^{m} w_i = 1
-\]
+$$
 
 Esto es importante. La app no usa pesos arbitrarios escritos a mano. Los deduce a partir de las posiciones y del último precio disponible.
 
@@ -877,30 +877,30 @@ Por eso `RiskFragment`:
 2. ordena esas fechas,
 3. y solo con ellas construye la matriz de retornos.
 
-Para cada activo \( i \) y para cada fecha \( t \), el retorno logarítmico es:
+Para cada activo $i$ y para cada fecha $t$, el retorno logarítmico es:
 
-\[
+$$
 r_{t,i} = \ln\left(\frac{P_{t,i}}{P_{t-1,i}}\right)
-\]
+$$
 
 Con eso se obtiene una matriz:
 
-\[
+$$
 R \in \mathbb{R}^{T \times m}
-\]
+$$
 
 donde:
 
-1. \( T \) es el número de retornos disponibles,
-2. \( m \) es el número de activos.
+1. $T$ es el número de retornos disponibles,
+2. $m$ es el número de activos.
 
 ### Matriz de covarianza
 
 `RiskEngine` construye la covarianza empírica:
 
-\[
+$$
 \Sigma = \operatorname{Cov}(R)
-\]
+$$
 
 Esta matriz resume cómo varían los retornos de forma conjunta.
 
@@ -908,37 +908,37 @@ Esta matriz resume cómo varían los retornos de forma conjunta.
 
 La varianza paramétrica de la cartera se calcula como:
 
-\[
+$$
 \sigma_p^2 = w^{\top}\Sigma w
-\]
+$$
 
 La volatilidad diaria es:
 
-\[
+$$
 \sigma_{p,d} = \sqrt{w^{\top}\Sigma w}
-\]
+$$
 
 Y la volatilidad anualizada:
 
-\[
+$$
 \sigma_{p,a} = \sigma_{p,d}\sqrt{252}
-\]
+$$
 
-El factor \( \sqrt{252} \) responde a la convención de 252 sesiones bursátiles anuales.
+El factor $\sqrt{252}$ responde a la convención de 252 sesiones bursátiles anuales.
 
 ### VaR paramétrico al 95%
 
 La app usa un VaR paramétrico normal al 95%, con:
 
-\[
+$$
 z_{0.95} = 1.645
-\]
+$$
 
 Entonces:
 
-\[
+$$
 \operatorname{VaR}_{95} = N \cdot z_{0.95} \cdot \sigma_{p,d}
-\]
+$$
 
 Interpretación: es una pérdida monetaria diaria que solo debería superarse aproximadamente en el 5% peor de los casos, bajo la lógica paramétrica empleada.
 
@@ -948,27 +948,27 @@ Aquí la app hace algo distinto, y de hecho más interesante: el CVaR se calcula
 
 Primero, para cada día, se proyecta el retorno de cartera:
 
-\[
+$$
 r_{p,t} = \sum_{i=1}^{m} w_i r_{t,i}
-\]
+$$
 
 Después se ordenan los retornos de peor a mejor y se toma el 5% peor:
 
-\[
+$$
 \mathcal{T}_{0.05} = \text{peores } \lceil 0.05T \rceil \text{ observaciones}
-\]
+$$
 
 La media de cola es:
 
-\[
+$$
 \operatorname{ES}_{95} = \frac{1}{|\mathcal{T}_{0.05}|}\sum_{r \in \mathcal{T}_{0.05}} r
-\]
+$$
 
 Y el valor monetario mostrado es:
 
-\[
+$$
 \operatorname{CVaR}_{95} = N \cdot |\operatorname{ES}_{95}|
-\]
+$$
 
 Esto permite medir no solo el umbral de pérdida, sino la severidad media cuando la cola realmente se activa.
 
@@ -976,9 +976,9 @@ Esto permite medir no solo el umbral de pérdida, sino la severidad media cuando
 
 A partir de la covarianza se construye:
 
-\[
+$$
 \rho_{ij} = \frac{\Sigma_{ij}}{\sqrt{\Sigma_{ii}}\sqrt{\Sigma_{jj}}}
-\]
+$$
 
 La matriz de correlación se renderiza como un heatmap hecho manualmente con `GridLayout`. Cada celda se colorea así:
 
@@ -1094,9 +1094,9 @@ Eso evita sacar beta o volatilidades sobre muestras pobres.
 
 El motor usa:
 
-\[
+$$
 r_t = \ln\left(\frac{P_t}{P_{t-1}}\right)
-\]
+$$
 
 La función `calculateLogReturns(...)` devuelve la serie de retornos del activo y del benchmark.
 
@@ -1104,36 +1104,36 @@ La función `calculateLogReturns(...)` devuelve la serie de retornos del activo 
 
 La beta se calcula como:
 
-\[
+$$
 \beta = \frac{\operatorname{Cov}(r_a, r_m)}{\operatorname{Var}(r_m)}
-\]
+$$
 
 donde:
 
-1. \( r_a \) son los retornos del activo,
-2. \( r_m \) son los retornos del mercado.
+1. $r_a$ son los retornos del activo,
+2. $r_m$ son los retornos del mercado.
 
 Interpretación:
 
-1. \( \beta > 1 \): el activo amplifica al mercado.
-2. \( \beta < 1 \): el activo es más defensivo.
-3. \( \beta \approx 0 \): el activo está muy desacoplado.
+1. $\beta > 1$: el activo amplifica al mercado.
+2. $\beta < 1$: el activo es más defensivo.
+3. $\beta \approx 0$: el activo está muy desacoplado.
 
 ### True Range y ATR
 
 El rango verdadero diario es:
 
-\[
+$$
 TR_t = \max\left(H_t - L_t,\ |H_t - C_{t-1}|,\ |L_t - C_{t-1}|\right)
-\]
+$$
 
-Esto es mejor que usar solo \( H_t - L_t \), porque incorpora gaps de apertura.
+Esto es mejor que usar solo $H_t - L_t$, porque incorpora gaps de apertura.
 
-En el motor, el ATR que se muestra como escalar se calcula como media simple de los últimos \( n \) valores de `TR`, con \( n = 14 \):
+En el motor, el ATR que se muestra como escalar se calcula como media simple de los últimos $n$ valores de `TR`, con $n = 14$:
 
-\[
+$$
 ATR_t^{(14)} = \frac{1}{14}\sum_{k=0}^{13} TR_{t-k}
-\]
+$$
 
 Importante: en esta implementación el ATR es una **SMA de true ranges**, no el suavizado clásico de Wilder.
 
@@ -1141,11 +1141,11 @@ Importante: en esta implementación el ATR es una **SMA de true ranges**, no el 
 
 La app calcula:
 
-\[
+$$
 RVOL_t = \frac{V_t}{\frac{1}{n}\sum_{k=1}^{n}V_{t-k}}
-\]
+$$
 
-con \( n = 20 \).
+con $n = 20$.
 
 Es decir, compara el volumen actual con la media reciente de volumen. Si el resultado es muy superior a 1, el movimiento actual está ocurriendo con más participación que la habitual.
 
@@ -1153,9 +1153,9 @@ Es decir, compara el volumen actual con la media reciente de volumen. Si el resu
 
 La desviación típica anualizada de una ventana de retornos se calcula como:
 
-\[
+$$
 \hat{\sigma}_{ann} = \sqrt{\frac{1}{m-1}\sum_{t=1}^{m}(r_t - \bar{r})^2}\cdot\sqrt{252}
-\]
+$$
 
 Esto aparece dentro del cálculo del percentil de volatilidad.
 
@@ -1163,11 +1163,11 @@ Esto aparece dentro del cálculo del percentil de volatilidad.
 
 La función `calculateVolatilityPercentile(...)` toma ventanas de 20 días a lo largo del histórico. Para cada ventana calcula su sigma anualizada y compara la sigma actual con todas las anteriores.
 
-Si llamamos \( \sigma_1, \sigma_2, \dots, \sigma_K \) a esas volatilidades históricas y \( \sigma_{act} \) a la última:
+Si llamamos $\sigma_1, \sigma_2, \dots, \sigma_K$ a esas volatilidades históricas y $\sigma_{act}$ a la última:
 
-\[
+$$
 \text{PctVol} = \frac{1}{K}\sum_{k=1}^{K}\mathbf{1}_{\{\sigma_k < \sigma_{act}\}}
-\]
+$$
 
 Ese resultado se multiplica por 100 para mostrarlo como porcentaje.
 

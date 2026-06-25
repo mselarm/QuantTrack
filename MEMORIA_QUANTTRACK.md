@@ -95,7 +95,7 @@ También hay un detalle básico pero necesario: en `AndroidManifest.xml` se decl
 
 ## 3. Arquitectura real del proyecto
 
-En el README inicial se habla de una arquitectura modular inspirada en MVVM (Model View-ViewModel. Eso ayuda a entender la intención del proyecto, pero conviene ser precisos: el código actual no implementa un MVVM completo, porque no hay `ViewModel`, ni `LiveData`, ni `StateFlow`, ni una capa de estado reactiva.
+En el README inicial se habla de una arquitectura modular inspirada en MVVM. Eso ayuda a entender la intención del proyecto, pero conviene ser precisos: el código actual no implementa un MVVM completo, porque no hay `ViewModel`, ni `LiveData`, ni `StateFlow`, ni una capa de estado reactiva.
 
 Lo que sí existe, y funciona bien, es una arquitectura por capas bastante limpia:
 

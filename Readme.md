@@ -1,11 +1,5 @@
 # Memoria técnica de QuantTrack
 
-Este documento resume cómo está construida la aplicación `QuantTrack`, qué problema intenta resolver y qué hace cada una de sus pestañas. La idea es que cualquier compañero pueda leerlo y entender la app sin tener que saltar de archivo en archivo.
-
-He intentado mantener un tono claro. Cuando hace falta, entro en detalle matemático. Cuando no, voy al grano. También he dejado huecos y precódigo para meter imágenes más tarde.
-
-> Nota práctica: varios esquemas están hechos con `mermaid` para que se vean como diagramas de cajitas dentro del propio `.md`. Si el visor que uséis no renderiza `mermaid`, luego se pueden exportar a imagen sin cambiar el texto.
-
 ## 1. Propósito de la aplicación
 
 `QuantTrack` es una app Android orientada al análisis cuantitativo básico de mercado. No intenta ser una plataforma de trading ni un sistema de ejecución. Su papel es otro: descargar datos, transformarlos en métricas financieras entendibles y enseñarlos de una forma visual.

@@ -57,12 +57,12 @@ flowchart LR
 | `Volatility` | Riesgo y liquidez de un activo | Beta, percentil de volatilidad, ATR y RVOL |
 | `Gemini + Biblioteca` | Explicación contextual | Un resumen en lenguaje natural de la pantalla actual |
 
-### Imagen sugerida
+### Imagen 
 
-> Imagen pendiente: captura de la pantalla principal con las cuatro pestañas y el botón flotante.
+>Captura de la pantalla principal con las cuatro pestañas y el botón flotante.
 
 ```md
-![Pantalla principal de QuantTrack](./imagenes/quanttrack-home.png)
+![Pantalla principal de QuantTrack](./images/home.png.jpeg)
 ```
 
 ## 2. Dependencias utilizadas
@@ -85,12 +85,12 @@ La aplicación se apoya en pocas librerías, pero están bien escogidas. Cada un
 
 También hay un detalle básico pero necesario: en `AndroidManifest.xml` se declara el permiso `INTERNET`, sin el cual ninguna descarga de datos funcionaría.
 
-### Imagen sugerida
+### Imagen 
 
-> Imagen pendiente: diagrama-resumen de librerías y responsabilidades.
+> Imagen: diagrama-resumen de librerías y responsabilidades.
 
 ```md
-![Dependencias principales de QuantTrack](./imagenes/dependencias-quanttrack.png)
+![Dependencias principales de QuantTrack](./images/depend.png)
 ```
 
 ## 3. Arquitectura real del proyecto
@@ -265,14 +265,6 @@ Concretamente:
 4. Devuelve un `Spanned` usando `Html.fromHtml(...)`.
 
 En otras palabras, actúa como una capa mínima de presentación. Sin ella, la respuesta del modelo saldría como texto plano y quedaría mucho peor.
-
-### Imagen sugerida
-
-> Imagen pendiente: captura de `MainActivity` con la barra inferior y el botón flotante marcado.
-
-```md
-![MainActivity y navegación inferior](./imagenes/mainactivity-navegacion.png)
-```
 
 ## 5. Pestaña Micro: tendencia y momentum de una acción
 
@@ -502,12 +494,12 @@ El layout reparte el alto con `layout_weight`:
 
 Eso está bien resuelto, porque el RSI es importante, pero no debe competir visualmente con la serie principal.
 
-### Imagen sugerida
+### Imagen 
 
-> Imagen pendiente: captura de la pestaña Micro con una acción cargada.
+> Imagen: captura de la pestaña Micro con una acción cargada.
 
 ```md
-![Pestaña Micro con velas, SMA y RSI](./imagenes/micro-aapl.png)
+![Pestaña Micro con velas, SMA y RSI](./images/micro.jpeg)
 ```
 
 ## 6. Pestaña Macro: curva de tipos, spread y PCA sobre vencimientos
@@ -741,12 +733,12 @@ Es un layout muy limpio. Tiene lógica de lectura vertical:
 3. debajo la evolución temporal de factores,
 4. al final un resumen textual.
 
-### Imagen sugerida
+### Imagen 
 
-> Imagen pendiente: captura de la pestaña Macro con la curva y el panel de FPCA.
+> Imagen : captura de la pestaña Macro con la curva y el panel de FPCA.
 
 ```md
-![Pestaña Macro con curva de tipos y factores](./imagenes/macro-yield-curve.png)
+![Pestaña Macro con curva de tipos y factores](./images/macro.jpeg)
 ```
 
 ## 7. Pestaña Risk: cartera, covarianza, VaR, CVaR y persistencia con Room
@@ -1034,12 +1026,12 @@ El XML está bien pensado:
 3. debajo aparece la parte matricial,
 4. y al final el gráfico circular.
 
-### Imagen sugerida
+### Imagen 
 
-> Imagen pendiente: captura de la pestaña Risk con una cartera cargada.
+> Imagen: captura de la pestaña Risk con una cartera cargada.
 
 ```md
-![Pestaña Risk con heatmap y pie chart](./imagenes/risk-cartera.png)
+![Pestaña Risk con heatmap y pie chart](./images/riesgo.jpeg)
 ```
 
 ## 8. Pestaña Volatility: beta, ATR, percentil de volatilidad y RVOL
@@ -1211,12 +1203,12 @@ La organización aquí es muy agradecida:
 2. luego las dos tarjetas de lectura rápida,
 3. y abajo el gráfico grande.
 
-### Imagen sugerida
+### Imagen 
 
-> Imagen pendiente: captura de la pestaña Volatility con un ticker analizado.
+> Imagen: captura de la pestaña Volatility con un ticker analizado.
 
 ```md
-![Pestaña Volatility con beta, ATR y RVOL](./imagenes/volatility-nvda.png)
+![Pestaña Volatility con beta, ATR y RVOL](./images/volat.jpeg)
 ```
 
 ## 9. Cómo están programados los XML y la interfaz
@@ -1285,7 +1277,7 @@ flowchart TD
 > Imagen pendiente: captura de la biblioteca con búsqueda y varios términos.
 
 ```md
-![Biblioteca y búsqueda de términos](./imagenes/glosario-bottom-sheet.png)
+![Biblioteca y búsqueda de términos](./images/biblio.jpeg)
 ```
 
 ## 10. Detalles importantes de la app que también merece la pena explicar

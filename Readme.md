@@ -89,9 +89,8 @@ También hay un detalle básico pero necesario: en `AndroidManifest.xml` se decl
 
 > Imagen: diagrama-resumen de librerías y responsabilidades.
 
-```md
 ![Dependencias principales de QuantTrack](./images/depend.png)
-```
+
 
 ## 3. Arquitectura real del proyecto
 

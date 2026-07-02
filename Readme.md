@@ -61,9 +61,9 @@ flowchart LR
 
 >Captura de la pantalla principal con las cuatro pestañas y el botón flotante.
 
-```md
+
 ![Pantalla principal de QuantTrack](./images/home.png.jpeg)
-```
+
 
 ## 2. Dependencias utilizadas
 

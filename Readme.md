@@ -891,7 +891,7 @@ donde:
 `RiskEngine` construye la covarianza empírica:
 
 $$
-\Sigma = \operatorname{Cov}(R)
+\Sigma = \text{Cov}(R)
 $$
 
 Esta matriz resume cómo varían los retornos de forma conjunta.
@@ -929,7 +929,7 @@ $$
 Entonces:
 
 $$
-\operatorname{VaR}_{95} = N \cdot z_{0.95} \cdot \sigma_{p,d}
+\text{VaR}_{95} = N \cdot z_{0.95} \cdot \sigma_{p,d}
 $$
 
 Interpretación: es una pérdida monetaria diaria que solo debería superarse aproximadamente en el 5% peor de los casos, bajo la lógica paramétrica empleada.
@@ -953,13 +953,13 @@ $$
 La media de cola es:
 
 $$
-\operatorname{ES}_{95} = \frac{1}{|\mathcal{T}_{0.05}|}\sum_{r \in \mathcal{T}_{0.05}} r
+\text{ES}_{95} = \frac{1}{|\mathcal{T}_{0.05}|}\sum_{r \in \mathcal{T}_{0.05}} r
 $$
 
 Y el valor monetario mostrado es:
 
 $$
-\operatorname{CVaR}_{95} = N \cdot |\operatorname{ES}_{95}|
+\text{CVaR}_{95} = N \cdot |\text{ES}_{95}|
 $$
 
 Esto permite medir no solo el umbral de pérdida, sino la severidad media cuando la cola realmente se activa.
@@ -1097,7 +1097,7 @@ La función `calculateLogReturns(...)` devuelve la serie de retornos del activo 
 La beta se calcula como:
 
 $$
-\beta = \frac{\operatorname{Cov}(r_a, r_m)}{\operatorname{Var}(r_m)}
+\beta = \frac{\text{Cov}(r_a, r_m)}{\text{Var}(r_m)}
 $$
 
 donde:

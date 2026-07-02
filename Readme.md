@@ -355,7 +355,7 @@ La pestaña `Micro` usa sobre todo la serie de cierres \( \{C_t\} \), aunque con
 La clase `SimpleMovingAverage` implementa una media móvil simple de periodo \( n \):
 
 $$
-\operatorname{SMA}_t^{(n)} = \frac{1}{n}\sum_{k=0}^{n-1} C_{t-k}
+\text{SMA}_t^{(n)} = \frac{1}{n}\sum_{k=0}^{n-1} C_{t-k}
 $$
 
 En la app se usan tres periodos:
@@ -381,7 +381,7 @@ $$
 y entonces:
 
 $$
-\operatorname{SMA}_t^{(n)} = \frac{S_t}{n}
+\text{SMA}_t^{(n)} = \frac{S_t}{n}
 $$
 
 Eso reduce la complejidad a $O(N)$, que es lo correcto para series largas.

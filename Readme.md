@@ -498,9 +498,9 @@ Eso está bien resuelto, porque el RSI es importante, pero no debe competir visu
 
 > Imagen: captura de la pestaña Micro con una acción cargada.
 
-```md
+
 ![Pestaña Micro con velas, SMA y RSI](./images/micro.jpeg)
-```
+
 
 ## 6. Pestaña Macro: curva de tipos, spread y PCA sobre vencimientos
 
@@ -737,9 +737,9 @@ Es un layout muy limpio. Tiene lógica de lectura vertical:
 
 > Imagen : captura de la pestaña Macro con la curva y el panel de FPCA.
 
-```md
+
 ![Pestaña Macro con curva de tipos y factores](./images/macro.jpeg)
-```
+
 
 ## 7. Pestaña Risk: cartera, covarianza, VaR, CVaR y persistencia con Room
 
@@ -1030,9 +1030,9 @@ El XML está bien pensado:
 
 > Imagen: captura de la pestaña Risk con una cartera cargada.
 
-```md
+
 ![Pestaña Risk con heatmap y pie chart](./images/riesgo.jpeg)
-```
+
 
 ## 8. Pestaña Volatility: beta, ATR, percentil de volatilidad y RVOL
 
@@ -1207,9 +1207,9 @@ La organización aquí es muy agradecida:
 
 > Imagen: captura de la pestaña Volatility con un ticker analizado.
 
-```md
+
 ![Pestaña Volatility con beta, ATR y RVOL](./images/volat.jpeg)
-```
+
 
 ## 9. Cómo están programados los XML y la interfaz
 
@@ -1276,9 +1276,9 @@ flowchart TD
 
 > Imagen pendiente: captura de la biblioteca con búsqueda y varios términos.
 
-```md
+
 ![Biblioteca y búsqueda de términos](./images/biblio.jpeg)
-```
+
 
 ## 10. Detalles importantes de la app que también merece la pena explicar
 

@@ -62,7 +62,7 @@ flowchart LR
 
 ## 2. Dependencias utilizadas
 
-La aplicación se apoya en pocas librerías, pero están bien escogidas. Cada una cubre una responsabilidad concreta.
+La aplicación se apoya en las siguientes librerías:
 
 | Dependencia | Papel dentro de la app | Dónde se usa |
 |---|---|---|
@@ -89,9 +89,7 @@ También hay un detalle básico pero necesario: en `AndroidManifest.xml` se decl
 
 ## 3. Arquitectura real del proyecto
 
-En el README inicial se habla de una arquitectura modular inspirada en MVVM. Eso ayuda a entender la intención del proyecto, pero conviene ser precisos: el código actual no implementa un MVVM completo, porque no hay `ViewModel`, ni `LiveData`, ni `StateFlow`, ni una capa de estado reactiva.
-
-Lo que sí existe, y funciona bien, es una arquitectura por capas bastante limpia:
+La aplicación tiene una arquitectura por capas :
 
 1. Una capa de interfaz hecha con `MainActivity`, `Fragment` y XML.
 2. Una capa de datos con repositorios que hablan con servicios externos.
@@ -137,7 +135,7 @@ flowchart LR
     C --> D["Pantalla actualizada"]
 ```
 
-Hay una buena idea de fondo aquí: los cálculos importantes están aislados en clases Java puras. Eso hace que la matemática sea más fácil de revisar, de probar y de explicar.
+Los cálculos importantes están aislados en clases Java puras. Eso hace que la matemática sea más fácil de revisar, de probar y de explicar.
 
 ## 4. MainActivity, navegación común y llamada a Gemini
 
@@ -597,11 +595,8 @@ $$
 
 Si el spread es negativo, la app lo pinta en rojo. Esa decisión visual está muy bien elegida: reduce el tiempo de lectura.
 
-### PCA de la curva de tipos
+Hacemos un PCA.
 
-El archivo se llama `FpcaEngine`, pero aquí conviene ser exactos: el código hace un PCA clásico sobre una discretización finita de la curva, no un FPCA funcional completo en el sentido más formal de análisis funcional.
-
-Eso no es un problema. De hecho, para una app docente es una aproximación razonable y muy interpretable.
 
 ### Paso 1: centrado por la media
 
@@ -777,7 +772,7 @@ flowchart LR
 
 ### Persistencia local con Room
 
-Aquí conviene aclarar un punto: la app usa **Room**, no "ROM". Room es la librería de persistencia de Android sobre SQLite.
+Aquí conviene aclarar un punto: la app usa **Room**. Room es la librería de persistencia de Android sobre SQLite.
 
 Las tres piezas son:
 
@@ -825,7 +820,7 @@ Cuando se añade un activo:
 3. si la respuesta es válida, se actualiza RAM y luego Room,
 4. si falla, no se guarda nada y se muestra un `Toast`.
 
-Es una buena decisión. Evita contaminar la base de datos con tickers erróneos.
+ Evita contaminar la base de datos con tickers erróneos.
 
 ### Construcción del notional
 
@@ -972,13 +967,10 @@ La matriz de correlación se renderiza como un heatmap hecho manualmente con `Gr
 2. rojo si es negativa,
 3. más oscuro si está cerca de cero.
 
-Es una solución artesanal, pero muy efectiva para una app académica.
 
 ### Relación con Markowitz
 
-La pestaña se describe como "VaR y Markowitz", y es razonable decirlo porque usa el corazón matemático de Markowitz: pesos, covarianzas y riesgo conjunto.
-
-Pero hay que decirlo bien en la memoria: **la app no resuelve un problema formal de optimización de cartera ni dibuja una frontera eficiente**. Lo que hace es evaluar la cartera actual. La sugerencia de "activos ortogonales" se deja al texto generado por Gemini.
+**La app no resuelve un problema formal de optimización de cartera ni dibuja una frontera eficiente**. Lo que hace es evaluar la cartera actual. La sugerencia de "activos ortogonales" se deja al texto generado por Gemini.
 
 ### Qué muestra visualmente `RiskFragment`
 
@@ -1282,7 +1274,6 @@ Aquí dejo varias observaciones que quizá no son el centro de la app, pero sí 
 
 `MarketRepository` usa un endpoint público de Yahoo Finance. Funciona, pero no ofrece el mismo contrato que una API oficial con documentación estable y SLA.
 
-Eso merece la pena decirlo en la entrega, porque explica por qué el código añade cabeceras HTTP personalizadas y por qué el parseo se hace con cierta prudencia.
 
 ### 10.2. El módulo macro tiene el año 2026 fijado en la URL
 
@@ -1298,13 +1289,9 @@ Es un detalle técnico pequeño, pero importante.
 
 ### 10.3. La clave de Gemini está embebida en el código
 
-`LlmRepository` lleva la API key dentro del propio archivo Java. Para una práctica académica puede servir, pero conviene dejar apuntado que eso no sería una solución segura en producción.
-
+`LlmRepository` lleva la API key dentro del propio archivo Java. Se debe 
 Lo correcto en un entorno real sería:
-
-1. mover la clave fuera del cliente,
-2. o usar un backend intermedio,
-3. o como mínimo un mecanismo de secretos más controlado.
+cambiar cada uno a su clave personal
 
 ### 10.4. La matemática está desacoplada del framework Android
 
@@ -1328,7 +1315,7 @@ Dicho de otra forma: primero hay cálculo, luego interpretación.
 
 ## 11. Referencias e inspiración técnica
 
-Estas son las referencias más útiles para justificar la arquitectura y las librerías empleadas. He mezclado documentación oficial con algunas referencias teóricas de apoyo.
+Estas son las referencias más útiles para justificar la arquitectura y las librerías empleadas.
 
 ### Android y arquitectura de interfaz
 
@@ -1358,17 +1345,8 @@ Estas son las referencias más útiles para justificar la arquitectura y las lib
 2. Giese, *Level, Slope, Curvature: Characterising the Yield Curve in a Cointegrated VAR Model*: [https://hdl.handle.net/10419/27512](https://hdl.handle.net/10419/27512)
 
 ## 12. Cierre
-
-`QuantTrack` está bien planteada para una práctica académica porque combina varias capas de trabajo reales:
-
-1. consumo de datos,
-2. visualización,
-3. estadística financiera,
-4. persistencia,
-5. y una capa opcional de interpretación con IA.
-
-No intenta hacerlo todo. Y eso, en este caso, es bueno.
+Quanttrack no intenta hacerlo todo. Y eso, en este caso, es bueno.
 
 La aplicación tiene una idea clara: tomar series de mercado, resumirlas con herramientas cuantitativas conocidas y convertirlas en una interfaz que cualquiera del equipo pueda leer sin perderse.
 
-Si más adelante hace falta, esta memoria se puede ampliar con una segunda parte centrada solo en capturas, decisiones de diseño o explicación línea por línea del código.
+

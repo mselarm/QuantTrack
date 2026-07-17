@@ -8,7 +8,7 @@ import retrofit2.Response;
 public class LlmRepository {
 
     // INYECTA TU CLAVE AQUÍ
-    private static final String API_KEY = "AIzaSyAKUf5siAS94bio2UfF__nSPqkXZORUxvQ";
+    private static final String API_KEY = "Tu clave de Gemini";
     private LlmApi api;
 
     // Puente de comunicación asíncrona para la interfaz
